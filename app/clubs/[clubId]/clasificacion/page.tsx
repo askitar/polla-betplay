@@ -29,6 +29,16 @@ export default async function ClasificacionPage({
             >
               {i + 1}
             </div>
+            <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-line-strong bg-card-hover">
+              {entry.userImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={entry.userImage} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center font-condensed text-xs text-ink-dim">
+                  {entry.userName.slice(0, 2).toUpperCase()}
+                </span>
+              )}
+            </div>
             <div className="flex-1">
               <div className="flex items-center gap-1.5 text-[15px] font-semibold">
                 {entry.userName}

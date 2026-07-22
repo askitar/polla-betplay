@@ -7,7 +7,8 @@ export default auth((req) => {
   const needsAuth =
     pathname.startsWith("/clubs") ||
     pathname.startsWith("/onboarding") ||
-    pathname.startsWith("/join");
+    pathname.startsWith("/join") ||
+    pathname.startsWith("/profile");
 
   if (needsAuth && !isLoggedIn) {
     const signInUrl = new URL("/signin", req.nextUrl.origin);
@@ -23,5 +24,5 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/clubs/:path*", "/onboarding/:path*", "/join/:path*"],
+  matcher: ["/clubs/:path*", "/onboarding/:path*", "/join/:path*", "/profile/:path*"],
 };

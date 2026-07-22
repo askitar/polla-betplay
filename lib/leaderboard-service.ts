@@ -4,6 +4,7 @@ import { computePoints } from "@/lib/scoring";
 export type LeaderboardEntry = {
   userId: string;
   userName: string;
+  userImage: string | null;
   points: number;
   played: number;
   exact: number;
@@ -12,7 +13,7 @@ export type LeaderboardEntry = {
 export async function getClubLeaderboard(clubId: string): Promise<LeaderboardEntry[]> {
   const memberships = await prisma.membership.findMany({
     where: { clubId },
-    include: { user: { select: { id: true, name: true } } },
+    include: { user: { select: { id: true, name: true, image: true } } },
   });
   const memberIds = memberships.map((m) => m.userId);
 
@@ -47,7 +48,14 @@ export async function getClubLeaderboard(clubId: string): Promise<LeaderboardEnt
       if (score === 3) exact++;
     }
 
-    return { userId: mem.userId, userName: mem.user.name ?? "Sin nombre", points, played, exact };
+    return {
+      userId: mem.userId,
+      userName: mem.user.name ?? "Sin nombre",
+      userImage: mem.user.image,
+      points,
+      played,
+      exact,
+    };
   });
 
   return entries.sort((a, b) => b.points - a.points || b.exact - a.exact);

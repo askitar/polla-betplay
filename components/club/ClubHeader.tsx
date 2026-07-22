@@ -4,9 +4,11 @@ import { ArrowLeft } from "lucide-react";
 export function ClubHeader({
   clubName,
   userName,
+  userImage,
 }: {
   clubName: string;
   userName: string;
+  userImage?: string | null;
 }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
@@ -19,10 +21,22 @@ export function ClubHeader({
           <div className="font-display text-2xl leading-tight">{clubName}</div>
         </div>
       </div>
-      <div className="text-right">
-        <div className="text-[11px] text-ink-dim">Jugando como</div>
-        <div className="text-sm font-semibold">{userName}</div>
-      </div>
+      <Link href="/profile" className="flex items-center gap-2.5 text-right">
+        <div>
+          <div className="text-[11px] text-ink-dim">Jugando como</div>
+          <div className="text-sm font-semibold">{userName}</div>
+        </div>
+        <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-line-strong bg-card-hover">
+          {userImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={userImage} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center font-condensed text-xs text-ink-dim">
+              {userName.slice(0, 2).toUpperCase()}
+            </span>
+          )}
+        </div>
+      </Link>
     </div>
   );
 }

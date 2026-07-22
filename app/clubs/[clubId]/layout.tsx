@@ -23,7 +23,11 @@ export default async function ClubLayout({
 
   return (
     <div className="flex flex-1 flex-col">
-      <ClubHeader clubName={membership.club.name} userName={session.user.name ?? ""} />
+      <ClubHeader
+        clubName={membership.club.name}
+        userName={session.user.name ?? ""}
+        userImage={session.user.image}
+      />
       <ClubTabs clubId={clubId} />
       <div className="mx-auto w-full max-w-3xl flex-1 px-5 pt-6 pb-24 lg:max-w-5xl lg:pb-6">
         {children}
