@@ -22,6 +22,8 @@ export type MatchView = {
     prediction: { homeScore: number; awayScore: number } | null;
   }> | null;
   missingMemberNames: string[] | null;
+  predictedCount: number;
+  totalMembers: number;
 };
 
 export async function getClubMatchesView(clubId: string, userId: string, now: Date = new Date()) {
@@ -46,21 +48,31 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
     .filter((t) => t > now.getTime());
   const nextKickoffMs = futureKickoffs.length ? Math.min(...futureKickoffs) : null;
 
-  // Matches where we need to know OTHER members' predictions: either already
-  // started (full reveal) or inside the 2h warning window (existence only,
-  // never the actual scores — that stays hidden server-side until kickoff).
-  const relevantMatchIds = matches
-    .filter((m) => isStarted(m.kickoff, now) || isWithinWarningWindow(m.kickoff, now))
-    .map((m) => m.id);
-
-  const relevantPredictions = relevantMatchIds.length
+  // Existence-only (never scores) predictions for every club member, across
+  // every match — used for the "X de Y ya predijeron" counter. This is safe
+  // to compute regardless of kickoff time since it never exposes a guess.
+  const allPredictions = memberIds.length
     ? await prisma.prediction.findMany({
-        where: { matchId: { in: relevantMatchIds }, userId: { in: memberIds } },
+        where: { matchId: { in: matches.map((m) => m.id) }, userId: { in: memberIds } },
+        select: { matchId: true, userId: true },
       })
     : [];
+  const existenceIndex = new Map<string, Set<string>>();
+  for (const p of allPredictions) {
+    if (!existenceIndex.has(p.matchId)) existenceIndex.set(p.matchId, new Set());
+    existenceIndex.get(p.matchId)!.add(p.userId);
+  }
 
+  // Matches where we need to know OTHER members' actual scores: only once
+  // started (full reveal) — never before, regardless of the counter above.
+  const startedMatchIds = matches.filter((m) => isStarted(m.kickoff, now)).map((m) => m.id);
+  const startedPredictions = startedMatchIds.length
+    ? await prisma.prediction.findMany({
+        where: { matchId: { in: startedMatchIds }, userId: { in: memberIds } },
+      })
+    : [];
   const predictionIndex = new Map<string, Map<string, { homeScore: number; awayScore: number }>>();
-  for (const p of relevantPredictions) {
+  for (const p of startedPredictions) {
     if (!predictionIndex.has(p.matchId)) predictionIndex.set(p.matchId, new Map());
     predictionIndex.get(p.matchId)!.set(p.userId, { homeScore: p.homeScore, awayScore: p.awayScore });
   }
@@ -70,6 +82,7 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
     const locked = m.status === "FINISHED" || isLocked(m.kickoff, now);
     const withinWarning = !started && isWithinWarningWindow(m.kickoff, now);
     const mine = myPredictionMap.get(m.id) ?? null;
+    const predictedIds = existenceIndex.get(m.id);
     const predsForMatch = predictionIndex.get(m.id);
 
     let membersReveal: MatchView["membersReveal"] = null;
@@ -83,7 +96,7 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
       }));
     } else if (withinWarning) {
       missingMemberNames = memberships
-        .filter((mem) => !predsForMatch?.has(mem.userId))
+        .filter((mem) => !predictedIds?.has(mem.userId))
         .map((mem) => mem.user.name ?? "Sin nombre");
     }
 
@@ -104,6 +117,8 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
       selfMissingWarning: withinWarning && !mine,
       membersReveal,
       missingMemberNames,
+      predictedCount: predictedIds?.size ?? 0,
+      totalMembers: memberships.length,
     };
   });
 

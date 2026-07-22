@@ -91,6 +91,13 @@ export function MatchCard({
         {finished && <div className="text-[11px] text-ink-faint">FINAL</div>}
       </div>
 
+      {!finished && match.totalMembers > 0 && (
+        <div className="mb-3 text-[12px] text-ink-faint">
+          {match.predictedCount} de {match.totalMembers}{" "}
+          {match.totalMembers === 1 ? "jugador ya puso" : "jugadores ya pusieron"} marcador
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-1.5 sm:gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
           <TeamBadge name={match.homeTeam.name} uid={`${match.id}-home`} />

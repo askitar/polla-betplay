@@ -16,7 +16,9 @@ export default auth((req) => {
   }
 
   if (isLoggedIn && pathname.startsWith("/clubs") && !req.auth?.user?.name) {
-    return NextResponse.redirect(new URL("/onboarding", req.nextUrl.origin));
+    const onboardingUrl = new URL("/onboarding", req.nextUrl.origin);
+    onboardingUrl.searchParams.set("callbackUrl", pathname);
+    return NextResponse.redirect(onboardingUrl);
   }
 });
 

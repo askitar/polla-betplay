@@ -3,10 +3,23 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Logo } from "@/components/ui/Logo";
 
-export default async function OnboardingPage() {
+function safeCallback(url: string | undefined): string {
+  // Only ever redirect to a relative in-app path, never an external URL.
+  if (url && url.startsWith("/") && !url.startsWith("//")) return url;
+  return "/clubs";
+}
+
+export default async function OnboardingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ callbackUrl?: string }>;
+}) {
+  const { callbackUrl } = await searchParams;
+  const destination = safeCallback(callbackUrl);
+
   const session = await auth();
   if (!session?.user) redirect("/signin");
-  if (session.user.name) redirect("/clubs");
+  if (session.user.name) redirect(destination);
 
   async function saveName(formData: FormData) {
     "use server";
@@ -15,7 +28,7 @@ export default async function OnboardingPage() {
     const name = String(formData.get("name") || "").trim().slice(0, 30);
     if (!name) return;
     await prisma.user.update({ where: { id: session.user.id }, data: { name } });
-    redirect("/clubs");
+    redirect(destination);
   }
 
   return (

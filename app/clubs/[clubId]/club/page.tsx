@@ -2,8 +2,10 @@ import { redirect } from "next/navigation";
 import { Users } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getBaseUrl } from "@/lib/base-url";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { InviteCodeCard } from "@/components/club/InviteCodeCard";
+import { DeleteClubButton } from "@/components/club/DeleteClubButton";
 
 export default async function ClubTabPage({
   params,
@@ -17,21 +19,21 @@ export default async function ClubTabPage({
   const club = await prisma.club.findUnique({ where: { id: clubId } });
   if (!club) redirect("/clubs");
 
-  const memberships = await prisma.membership.findMany({
-    where: { clubId },
-    include: { user: { select: { id: true, name: true } } },
-    orderBy: { joinedAt: "asc" },
-  });
+  const [memberships, baseUrl] = await Promise.all([
+    prisma.membership.findMany({
+      where: { clubId },
+      include: { user: { select: { id: true, name: true } } },
+      orderBy: { joinedAt: "asc" },
+    }),
+    getBaseUrl(),
+  ]);
 
   const isAdmin = memberships.some((m) => m.userId === session.user.id && m.role === "ADMIN");
 
   return (
     <div>
-      <SectionLabel>Código de invitación</SectionLabel>
-      <InviteCodeCard code={club.code} />
-      <p className="mt-2 text-xs text-ink-faint">
-        Comparte este código para que tu combo se una al club.
-      </p>
+      <SectionLabel>Invitar gente</SectionLabel>
+      <InviteCodeCard code={club.code} inviteUrl={`${baseUrl}/join/${club.code}`} />
 
       <SectionLabel className="mt-7">Miembros ({memberships.length})</SectionLabel>
       <div className="card">
@@ -50,10 +52,15 @@ export default async function ClubTabPage({
       </div>
 
       {isAdmin && (
-        <p className="mt-3.5 text-xs leading-relaxed text-ink-faint">
-          Como admin, en la pestaña &quot;Partidos&quot; puedes cargar el marcador final de cada
-          partido para que se calculen los puntos.
-        </p>
+        <>
+          <p className="mt-3.5 text-xs leading-relaxed text-ink-faint">
+            Como admin, en la pestaña &quot;Partidos&quot; puedes cargar el marcador final de cada
+            partido para que se calculen los puntos.
+          </p>
+
+          <SectionLabel className="mt-7">Zona de riesgo</SectionLabel>
+          <DeleteClubButton clubId={club.id} clubName={club.name} />
+        </>
       )}
     </div>
   );
