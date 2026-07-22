@@ -20,10 +20,15 @@ export async function findClubByCode(code: string) {
   });
 }
 
-export async function joinClubByCode(userId: string, code: string) {
+type ClubPreview = NonNullable<Awaited<ReturnType<typeof findClubByCode>>>;
+
+export async function joinClubByCode(
+  userId: string,
+  code: string,
+): Promise<{ error: string; club?: undefined } | { error?: undefined; club: ClubPreview }> {
   const club = await findClubByCode(code);
   if (!club) {
-    return { error: "No encontramos un club con ese código." as const };
+    return { error: "No encontramos un club con ese código." };
   }
   await prisma.membership.upsert({
     where: { userId_clubId: { userId, clubId: club.id } },

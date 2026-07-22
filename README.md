@@ -74,29 +74,35 @@ schedule en QStash (ver más abajo).
 
 ## Pendiente antes de producción
 
-1. Correr `npx prisma migrate dev --name init` contra la base de datos real
-   de Neon para tener historial de migraciones (en local se usó `db push`
-   porque el Postgres local de `prisma dev` no deja crear la shadow database
-   que `migrate dev` necesita).
-2. Confirmar `API_FOOTBALL_LEAGUE_ID`/`API_FOOTBALL_SEASON_YEAR` con
+1. ~~Migración inicial~~ ya generada en `prisma/migrations/20260721231019_init`
+   (con `prisma migrate diff`, sin necesitar la shadow database que el
+   Postgres local de `prisma dev` no deja crear). El script de `build` corre
+   `prisma migrate deploy` antes de `next build`, así que Vercel la aplica
+   sola contra Neon en el primer deploy.
+2. Si más adelante activas la sincronización automática (ver sección de
+   arriba): confirmar `API_FOOTBALL_LEAGUE_ID`/`API_FOOTBALL_SEASON_YEAR` con
    `find-league.ts` y correr una sincronización real de prueba pegándole a
    `/api/cron/sync-matches` con el header `x-cron-secret`.
 3. En Upstash QStash, crear un schedule (cada 5-15 min) apuntando a
    `https://tudominio.com/api/cron/sync-matches` con el método POST. Una vez
    configurado, las signing keys activan la verificación de firma real y el
-   `CRON_SHARED_SECRET` deja de usarse.
+   `CRON_SHARED_SECRET` deja de usarse. (Solo aplica si activas la
+   sincronización automática.)
 4. Si vas a mandar correos a personas fuera de tu propia cuenta de Resend,
    verificar un dominio propio en Resend (si no, solo te llegan a ti mismo).
-5. Nota de matching: la sincronización enlaza equipos por nombre exacto la
-   primera vez (`Team.name`). Si la API trae un nombre con acentos o
-   abreviaturas distintas a los que sembramos (`prisma/seed.ts`), puede crear
-   un equipo duplicado — revisar la tabla `Team` tras la primera
-   sincronización real.
+5. Nota de matching: si algún día la sincronización automática corre, enlaza
+   equipos por nombre exacto la primera vez (`Team.name`). Si la API trae un
+   nombre con acentos o abreviaturas distintas a los que sembramos
+   (`prisma/seed.ts`), puede crear un equipo duplicado, revisar la tabla
+   `Team` tras la primera sincronización real.
+6. Nota de Neon: si `prisma migrate deploy` falla en el primer deploy por la
+   conexión pooled de Neon, usa la connection string "directa"/"unpooled"
+   que Neon también entrega, como `DATABASE_URL` en Vercel.
 
 ## Despliegue en Vercel
 
-1. Sube el repo a GitHub.
-2. Importa el proyecto en Vercel.
-3. Conecta Neon desde Storage → Neon (o pega tu propio `DATABASE_URL`/`DIRECT_URL`).
+1. Sube el repo a GitHub. ✅ ya hecho (`github.com/askitar/polla-betplay`).
+2. Importa el proyecto en Vercel (vercel.com → Add New → Project → elige el repo).
+3. Conecta Neon desde Storage → Neon (o pega tu propio `DATABASE_URL`).
 4. Agrega todas las variables de entorno de la tabla de arriba en Vercel → Settings → Environment Variables.
 5. Deploy. Conecta tu dominio propio en Settings → Domains cuando lo tengas.

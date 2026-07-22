@@ -31,7 +31,8 @@ export async function joinClubAction(
   if (!code) return { error: "Escribe un código de invitación." };
 
   const result = await joinClubByCode(session.user.id, code);
-  if ("error" in result) return { error: result.error };
+  if (result.error) return { error: result.error };
+  if (!result.club) return { error: "No se pudo unir al club." };
 
   redirect(`/clubs/${result.club.id}`);
 }
