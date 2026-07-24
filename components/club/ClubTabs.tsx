@@ -33,8 +33,8 @@ export function ClubTabs({ clubId }: { clubId: string }) {
       id: "perfil",
       label: "Perfil",
       icon: User,
-      href: `/profile?from=${encodeURIComponent(`/clubs/${clubId}/partidos`)}`,
-      active: pathname === "/profile",
+      href: `/clubs/${clubId}/perfil`,
+      active: pathname === `/clubs/${clubId}/perfil`,
     },
   ];
 

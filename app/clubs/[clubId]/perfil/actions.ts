@@ -48,6 +48,6 @@ export async function updateProfileAction(
     },
   });
 
-  revalidatePath("/profile");
+  revalidatePath("/clubs/[clubId]/perfil", "page");
   return { error: null, success: true };
 }

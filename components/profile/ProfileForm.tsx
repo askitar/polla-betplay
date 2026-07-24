@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
-import { updateProfileAction, type ProfileActionState } from "@/app/profile/actions";
+import { updateProfileAction, type ProfileActionState } from "@/app/clubs/[clubId]/perfil/actions";
 
 const initialState: ProfileActionState = { error: null };
 
@@ -38,6 +38,7 @@ export function ProfileForm({
   const [preview, setPreview] = useState<string | null>(image);
   const [imageValue, setImageValue] = useState("");
   const [imageError, setImageError] = useState<string | null>(null);
+  const [selectedTeamId, setSelectedTeamId] = useState(favoriteTeamId ?? "");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -55,8 +56,16 @@ export function ProfileForm({
 
   const initials = (name || "?").slice(0, 2).toUpperCase();
 
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    // Submitting via the form's `action` prop makes React auto-reset
+    // uncontrolled-looking fields (like this select) after success, wiping
+    // the just-picked team from the screen. Dispatching manually avoids that.
+    e.preventDefault();
+    formAction(new FormData(e.currentTarget));
+  }
+
   return (
-    <form action={formAction} className="flex flex-col gap-5">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <input type="hidden" name="image" value={imageValue} />
 
       <div className="flex items-center gap-4">
@@ -116,7 +125,8 @@ export function ProfileForm({
         <select
           id="favoriteTeamId"
           name="favoriteTeamId"
-          defaultValue={favoriteTeamId ?? ""}
+          value={selectedTeamId}
+          onChange={(e) => setSelectedTeamId(e.target.value)}
           className="input-field"
         >
           <option value="">Sin equipo favorito</option>
