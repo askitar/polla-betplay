@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Lock, Check, Star } from "lucide-react";
+import { Lock, Check, Star, Users, ChevronDown } from "lucide-react";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { ScoreDial } from "@/components/ui/ScoreDial";
 import { computePoints } from "@/lib/scoring";
 import { savePrediction } from "@/app/clubs/[clubId]/partidos/actions";
 import { AdminResultForm } from "@/components/match/AdminResultForm";
 import { CountdownTimer } from "@/components/match/CountdownTimer";
+import { GoalCelebration } from "@/components/match/GoalCelebration";
 import type { MatchView } from "@/lib/matches-service";
 
 function fmtDate(iso: Date | string) {
@@ -37,6 +38,8 @@ export function MatchCard({
     away: match.myPrediction?.awayScore ?? null,
   });
   const [justSaved, setJustSaved] = useState(false);
+  const [celebrate, setCelebrate] = useState(false);
+  const [showReveal, setShowReveal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -56,6 +59,8 @@ export function MatchCard({
         await savePrediction(clubId, match.id, draft.home!, draft.away!);
         setJustSaved(true);
         setTimeout(() => setJustSaved(false), 2000);
+        setCelebrate(true);
+        setTimeout(() => setCelebrate(false), 1400);
       } catch (e) {
         setError(e instanceof Error ? e.message : "No se pudo guardar.");
       }
@@ -82,6 +87,8 @@ export function MatchCard({
           : ""
       }`}
     >
+      {celebrate && <GoalCelebration />}
+
       {match.isNext && (
         <>
           <div className="absolute -top-2.5 left-4 rounded bg-gold px-2 py-0.5 font-condensed text-[11px] font-bold tracking-wide text-pitch">
@@ -218,21 +225,32 @@ export function MatchCard({
 
       {match.membersReveal && match.membersReveal.length > 0 && (
         <div className="mt-3 border-t border-dashed border-line-strong pt-3">
-          <div className="mb-2 text-[11px] tracking-wide text-ink-dim">
-            YA ARRANCÓ · PREDICCIONES DEL CLUB
-          </div>
-          <div className="flex flex-col gap-1.5">
-            {match.membersReveal.map((mem) => (
-              <div key={mem.userId} className="flex justify-between text-[13px]">
-                <span className="text-ink">{mem.userName}</span>
-                <span className="text-ink-dim">
-                  {mem.prediction
-                    ? `${mem.prediction.homeScore}–${mem.prediction.awayScore}`
-                    : "sin predicción"}
-                </span>
-              </div>
-            ))}
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowReveal((v) => !v)}
+            className="btn-secondary w-full text-[13px]"
+          >
+            <Users size={14} />
+            Predicciones jugadores
+            <ChevronDown
+              size={14}
+              className={`transition-transform ${showReveal ? "rotate-180" : ""}`}
+            />
+          </button>
+          {showReveal && (
+            <div className="mt-3 flex flex-col gap-1.5">
+              {match.membersReveal.map((mem) => (
+                <div key={mem.userId} className="flex justify-between text-[13px]">
+                  <span className="text-ink">{mem.userName}</span>
+                  <span className="text-ink-dim">
+                    {mem.prediction
+                      ? `${mem.prediction.homeScore}–${mem.prediction.awayScore}`
+                      : "sin predicción"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -28,9 +28,9 @@ export function CountdownTimer({ kickoff }: { kickoff: string }) {
   }, [target]);
 
   return (
-    <div className="absolute -top-2.5 right-4 flex flex-col items-center rounded bg-pitch px-2 py-0.5 leading-tight ring-1 ring-gold/50">
-      <span className="font-condensed text-[8px] tracking-wide text-gold-dim">COMIENZA EN</span>
-      <span className="font-condensed text-[11px] font-bold tracking-wide text-gold">{label}</span>
+    <div className="absolute -top-3 right-4 flex items-center gap-1.5 whitespace-nowrap rounded bg-pitch px-2.5 py-1 ring-1 ring-gold/50">
+      <span className="font-condensed text-[10px] tracking-wide text-gold-dim">COMIENZA EN</span>
+      <span className="font-condensed text-sm font-bold tracking-wide text-gold">{label}</span>
     </div>
   );
 }

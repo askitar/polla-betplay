@@ -65,15 +65,18 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
   }
 
   // Matches where we need to know OTHER members' actual scores: only once
-  // started (full reveal) — never before, regardless of the counter above.
-  const startedMatchIds = matches.filter((m) => isStarted(m.kickoff, now)).map((m) => m.id);
-  const startedPredictions = startedMatchIds.length
+  // locked (nobody can submit or change a prediction anymore, so seeing
+  // others' picks can't influence anyone's own) — never before.
+  const lockedMatchIds = matches
+    .filter((m) => m.status === "FINISHED" || isLocked(m.kickoff, now))
+    .map((m) => m.id);
+  const lockedPredictions = lockedMatchIds.length
     ? await prisma.prediction.findMany({
-        where: { matchId: { in: startedMatchIds }, userId: { in: memberIds } },
+        where: { matchId: { in: lockedMatchIds }, userId: { in: memberIds } },
       })
     : [];
   const predictionIndex = new Map<string, Map<string, { homeScore: number; awayScore: number }>>();
-  for (const p of startedPredictions) {
+  for (const p of lockedPredictions) {
     if (!predictionIndex.has(p.matchId)) predictionIndex.set(p.matchId, new Map());
     predictionIndex.get(p.matchId)!.set(p.userId, { homeScore: p.homeScore, awayScore: p.awayScore });
   }
@@ -89,7 +92,7 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
     let membersReveal: MatchView["membersReveal"] = null;
     let missingMemberNames: string[] | null = null;
 
-    if (started) {
+    if (locked) {
       membersReveal = memberships.map((mem) => ({
         userId: mem.userId,
         userName: mem.user.name ?? "Sin nombre",

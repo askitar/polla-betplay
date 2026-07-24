@@ -61,8 +61,8 @@ export default async function ClasificacionPage({
         Puntaje: 5 pts por marcador exacto · 2 pts por acertar el ganador o el empate · 1 pt por
         acertar el marcador de un solo equipo · 0 pts si fallas del todo (solo cuenta la categoría
         más alta que apliques, no se suman). Las predicciones se cierran 10 minutos antes del
-        pitazo inicial y las del resto del club solo se revelan cuando el partido ya arrancó, para
-        que nadie se copie.
+        pitazo inicial; desde ese momento puedes ver las del resto del club tocando
+        &quot;Predicciones jugadores&quot; en cada partido, para que nadie se copie antes.
       </p>
     </div>
   );
