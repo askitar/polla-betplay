@@ -7,6 +7,7 @@ import { ScoreDial } from "@/components/ui/ScoreDial";
 import { computePoints } from "@/lib/scoring";
 import { savePrediction } from "@/app/clubs/[clubId]/partidos/actions";
 import { AdminResultForm } from "@/components/match/AdminResultForm";
+import { CountdownTimer } from "@/components/match/CountdownTimer";
 import type { MatchView } from "@/lib/matches-service";
 
 function fmtDate(iso: Date | string) {
@@ -76,9 +77,12 @@ export function MatchCard({
       }`}
     >
       {match.isNext && (
-        <div className="absolute -top-2.5 left-4 rounded bg-gold px-2 py-0.5 font-condensed text-[11px] font-bold tracking-wide text-pitch">
-          PRÓXIMO
-        </div>
+        <>
+          <div className="absolute -top-2.5 left-4 rounded bg-gold px-2 py-0.5 font-condensed text-[11px] font-bold tracking-wide text-pitch">
+            PRÓXIMO
+          </div>
+          {!match.started && <CountdownTimer kickoff={match.kickoff.toISOString()} />}
+        </>
       )}
 
       <div className="mb-3 flex items-center justify-between">

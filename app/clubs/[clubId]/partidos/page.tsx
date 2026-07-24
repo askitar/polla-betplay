@@ -5,10 +5,12 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getClubMatchesView, groupJornadas, pickDefaultJornada } from "@/lib/matches-service";
 import { getClubLeaderboard } from "@/lib/leaderboard-service";
+import { isSameColombiaDay } from "@/lib/match-time";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { EmptyNote } from "@/components/ui/EmptyNote";
 import { MatchCard } from "@/components/match/MatchCard";
 import { JornadaSwitcher } from "@/components/match/JornadaSwitcher";
+import { CountdownTimer } from "@/components/match/CountdownTimer";
 
 export default async function PartidosPage({
   params,
@@ -41,6 +43,10 @@ export default async function PartidosPage({
     .filter((m) => m.status === "FINISHED")
     .sort((a, b) => b.kickoff.getTime() - a.kickoff.getTime());
 
+  const now = new Date();
+  const today = upcoming.filter((m) => isSameColombiaDay(m.kickoff, now));
+  const later = upcoming.filter((m) => !isSameColombiaDay(m.kickoff, now));
+
   const nextMatch = allMatches.find((m) => m.isNext);
   const topThree = leaderboard.slice(0, 3);
 
@@ -49,10 +55,21 @@ export default async function PartidosPage({
       <div>
         <JornadaSwitcher clubId={clubId} jornadas={jornadas} current={currentJornada} />
 
-        {upcoming.length > 0 && (
+        {today.length > 0 && (
           <>
-            <SectionLabel>Por jugar</SectionLabel>
-            {upcoming.map((m) => (
+            <SectionLabel>Hoy</SectionLabel>
+            {today.map((m) => (
+              <MatchCard key={m.id} clubId={clubId} match={m} isAdmin={isAdmin} />
+            ))}
+          </>
+        )}
+
+        {later.length > 0 && (
+          <>
+            <SectionLabel className={today.length > 0 ? "mt-2" : ""}>
+              Por jugar
+            </SectionLabel>
+            {later.map((m) => (
               <MatchCard key={m.id} clubId={clubId} match={m} isAdmin={isAdmin} />
             ))}
           </>
@@ -74,7 +91,12 @@ export default async function PartidosPage({
         {nextMatch && (
           <div className="sticky top-6">
             <SectionLabel>Próximo partido</SectionLabel>
-            <div className="ticket-card border-gold p-4 shadow-[0_0_0_1px_rgba(255,199,44,0.25),0_4px_18px_rgba(255,199,44,0.08)]">
+            <div className="ticket-card relative border-gold p-4 shadow-[0_0_0_1px_rgba(255,199,44,0.25),0_4px_18px_rgba(255,199,44,0.08)]">
+              {!nextMatch.started && (
+                <div className="absolute -top-2.5 right-4">
+                  <CountdownTimer kickoff={nextMatch.kickoff.toISOString()} />
+                </div>
+              )}
               <div className="text-center text-xs text-ink-dim">
                 {new Date(nextMatch.kickoff).toLocaleDateString("es-CO", {
                   weekday: "long",
