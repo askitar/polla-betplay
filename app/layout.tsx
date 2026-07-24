@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Anton, Barlow, Barlow_Condensed } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const anton = Anton({
@@ -35,7 +36,10 @@ export default function RootLayout({
       lang="es"
       className={`${anton.variable} ${barlowCondensed.variable} ${barlow.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans">
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
