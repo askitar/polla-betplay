@@ -25,10 +25,14 @@ export function ProfileForm({
   name,
   email,
   image,
+  teams,
+  favoriteTeamId,
 }: {
   name: string;
   email: string;
   image: string | null;
+  teams: Array<{ id: string; name: string }>;
+  favoriteTeamId: string | null;
 }) {
   const [state, formAction, pending] = useActionState(updateProfileAction, initialState);
   const [preview, setPreview] = useState<string | null>(image);
@@ -103,6 +107,25 @@ export function ProfileForm({
           required
           className="input-field"
         />
+      </div>
+
+      <div>
+        <label htmlFor="favoriteTeamId" className="mb-1.5 block text-xs text-ink-dim">
+          Equipo favorito
+        </label>
+        <select
+          id="favoriteTeamId"
+          name="favoriteTeamId"
+          defaultValue={favoriteTeamId ?? ""}
+          className="input-field"
+        >
+          <option value="">Sin equipo favorito</option>
+          {teams.map((team) => (
+            <option key={team.id} value={team.id}>
+              {team.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       <button type="submit" disabled={pending} className="btn-primary w-full">

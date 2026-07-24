@@ -5,7 +5,6 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getClubMatchesView, groupJornadas, pickDefaultJornada } from "@/lib/matches-service";
 import { getClubLeaderboard } from "@/lib/leaderboard-service";
-import { isSameColombiaDay } from "@/lib/match-time";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { EmptyNote } from "@/components/ui/EmptyNote";
 import { MatchCard } from "@/components/match/MatchCard";
@@ -25,14 +24,19 @@ export default async function PartidosPage({
   const { clubId } = await params;
   const { fecha } = await searchParams;
 
-  const [allMatches, membership, leaderboard] = await Promise.all([
+  const [allMatches, membership, leaderboard, me] = await Promise.all([
     getClubMatchesView(clubId, session.user.id),
     prisma.membership.findUnique({
       where: { userId_clubId: { userId: session.user.id, clubId } },
     }),
     getClubLeaderboard(clubId),
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { favoriteTeam: { select: { name: true } } },
+    }),
   ]);
   const isAdmin = membership?.role === "ADMIN";
+  const favoriteTeamName = me?.favoriteTeam?.name ?? null;
 
   const jornadas = groupJornadas(allMatches);
   const currentJornada = fecha ? Number(fecha) : pickDefaultJornada(allMatches);
@@ -43,9 +47,8 @@ export default async function PartidosPage({
     .filter((m) => m.status === "FINISHED")
     .sort((a, b) => b.kickoff.getTime() - a.kickoff.getTime());
 
-  const now = new Date();
-  const today = upcoming.filter((m) => isSameColombiaDay(m.kickoff, now));
-  const later = upcoming.filter((m) => !isSameColombiaDay(m.kickoff, now));
+  const today = upcoming.filter((m) => m.isToday);
+  const later = upcoming.filter((m) => !m.isToday);
 
   const nextMatch = allMatches.find((m) => m.isNext);
   const topThree = leaderboard.slice(0, 3);
@@ -59,7 +62,7 @@ export default async function PartidosPage({
           <>
             <SectionLabel>Hoy</SectionLabel>
             {today.map((m) => (
-              <MatchCard key={m.id} clubId={clubId} match={m} isAdmin={isAdmin} />
+              <MatchCard key={m.id} clubId={clubId} match={m} isAdmin={isAdmin} favoriteTeamName={favoriteTeamName} />
             ))}
           </>
         )}
@@ -70,7 +73,7 @@ export default async function PartidosPage({
               Por jugar
             </SectionLabel>
             {later.map((m) => (
-              <MatchCard key={m.id} clubId={clubId} match={m} isAdmin={isAdmin} />
+              <MatchCard key={m.id} clubId={clubId} match={m} isAdmin={isAdmin} favoriteTeamName={favoriteTeamName} />
             ))}
           </>
         )}
@@ -79,7 +82,7 @@ export default async function PartidosPage({
           <>
             <SectionLabel className="mt-2">Finalizados</SectionLabel>
             {finished.map((m) => (
-              <MatchCard key={m.id} clubId={clubId} match={m} isAdmin={isAdmin} />
+              <MatchCard key={m.id} clubId={clubId} match={m} isAdmin={isAdmin} favoriteTeamName={favoriteTeamName} />
             ))}
           </>
         )}

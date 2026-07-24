@@ -2,14 +2,18 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
 export function ClubHeader({
+  clubId,
   clubName,
   userName,
   userImage,
 }: {
+  clubId: string;
   clubName: string;
   userName: string;
   userImage?: string | null;
 }) {
+  const profileHref = `/profile?from=${encodeURIComponent(`/clubs/${clubId}/partidos`)}`;
+
   return (
     <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
       <div className="flex items-center gap-3">
@@ -21,7 +25,7 @@ export function ClubHeader({
           <div className="font-display text-2xl leading-tight">{clubName}</div>
         </div>
       </div>
-      <Link href="/profile" className="flex items-center gap-2.5 text-right">
+      <Link href={profileHref} className="flex items-center gap-2.5 text-right">
         <div>
           <div className="text-[11px] text-ink-dim">Jugando como</div>
           <div className="text-sm font-semibold">{userName}</div>

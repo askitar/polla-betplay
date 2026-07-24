@@ -32,10 +32,18 @@ export async function updateProfileAction(
     imageDataUrl = image;
   }
 
+  const favoriteTeamIdRaw = String(formData.get("favoriteTeamId") || "");
+  const favoriteTeamId = favoriteTeamIdRaw.length > 0 ? favoriteTeamIdRaw : null;
+  if (favoriteTeamId) {
+    const team = await prisma.team.findUnique({ where: { id: favoriteTeamId } });
+    if (!team) return { error: "Equipo inválido." };
+  }
+
   await prisma.user.update({
     where: { id: session.user.id },
     data: {
       name,
+      favoriteTeamId,
       ...(imageDataUrl ? { image: imageDataUrl } : {}),
     },
   });

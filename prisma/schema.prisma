@@ -13,13 +13,15 @@ datasource db {
 // --- Auth.js v5 (@auth/prisma-adapter) required tables ---
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-  createdAt     DateTime  @default(now())
+  id             String    @id @default(cuid())
+  name           String?
+  email          String    @unique
+  emailVerified  DateTime?
+  image          String?
+  favoriteTeamId String?
+  createdAt      DateTime  @default(now())
 
+  favoriteTeam Team?        @relation("FavoriteTeam", fields: [favoriteTeamId], references: [id])
   accounts     Account[]
   sessions     Session[]
   memberships  Membership[]
@@ -127,8 +129,9 @@ model Team {
   // team's badge color/initials stay stable even if the API tweaks its name.
   badgeSeed  String
 
-  homeMatches Match[] @relation("HomeTeam")
-  awayMatches Match[] @relation("AwayTeam")
+  homeMatches   Match[] @relation("HomeTeam")
+  awayMatches   Match[] @relation("AwayTeam")
+  favoritedBy   User[]  @relation("FavoriteTeam")
 }
 
 enum MatchStatus {

@@ -2,12 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Logo } from "@/components/ui/Logo";
-
-function safeCallback(url: string | undefined): string {
-  // Only ever redirect to a relative in-app path, never an external URL.
-  if (url && url.startsWith("/") && !url.startsWith("//")) return url;
-  return "/clubs";
-}
+import { safeRedirectTarget } from "@/lib/safe-redirect";
 
 export default async function OnboardingPage({
   searchParams,
@@ -15,7 +10,7 @@ export default async function OnboardingPage({
   searchParams: Promise<{ callbackUrl?: string }>;
 }) {
   const { callbackUrl } = await searchParams;
-  const destination = safeCallback(callbackUrl);
+  const destination = safeRedirectTarget(callbackUrl, "/clubs");
 
   const session = await auth();
   if (!session?.user) redirect("/signin");

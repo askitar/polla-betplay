@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { isLocked, isStarted, isWithinWarningWindow } from "@/lib/match-time";
+import { isLocked, isStarted, isWithinWarningWindow, isSameColombiaDay } from "@/lib/match-time";
 
 export type MatchView = {
   id: string;
@@ -14,6 +14,7 @@ export type MatchView = {
   locked: boolean;
   started: boolean;
   isNext: boolean;
+  isToday: boolean;
   myPrediction: { homeScore: number; awayScore: number } | null;
   selfMissingWarning: boolean;
   membersReveal: Array<{
@@ -113,6 +114,7 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
       locked,
       started,
       isNext: nextKickoffMs != null && m.kickoff.getTime() === nextKickoffMs && m.status !== "FINISHED",
+      isToday: isSameColombiaDay(m.kickoff, now),
       myPrediction: mine,
       selfMissingWarning: withinWarning && !mine,
       membersReveal,

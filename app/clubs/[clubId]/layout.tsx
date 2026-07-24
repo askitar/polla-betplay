@@ -24,6 +24,7 @@ export default async function ClubLayout({
   return (
     <div className="flex flex-1 flex-col">
       <ClubHeader
+        clubId={clubId}
         clubName={membership.club.name}
         userName={session.user.name ?? ""}
         userImage={session.user.image}

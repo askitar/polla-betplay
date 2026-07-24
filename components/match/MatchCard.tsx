@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Lock, Check } from "lucide-react";
+import { Lock, Check, Star } from "lucide-react";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { ScoreDial } from "@/components/ui/ScoreDial";
 import { computePoints } from "@/lib/scoring";
@@ -25,10 +25,12 @@ export function MatchCard({
   clubId,
   match,
   isAdmin = false,
+  favoriteTeamName = null,
 }: {
   clubId: string;
   match: MatchView;
   isAdmin?: boolean;
+  favoriteTeamName?: string | null;
 }) {
   const [draft, setDraft] = useState<{ home: number | null; away: number | null }>({
     home: match.myPrediction?.homeScore ?? null,
@@ -68,6 +70,10 @@ export function MatchCard({
         })
       : null;
 
+  const isFavoriteHome = favoriteTeamName != null && match.homeTeam.name === favoriteTeamName;
+  const isFavoriteAway = favoriteTeamName != null && match.awayTeam.name === favoriteTeamName;
+  const favoritePlayingToday = (isFavoriteHome || isFavoriteAway) && match.isToday && !finished;
+
   return (
     <div
       className={`ticket-card relative mb-3 p-4 ${
@@ -95,6 +101,13 @@ export function MatchCard({
         {finished && <div className="text-[11px] text-ink-faint">FINAL</div>}
       </div>
 
+      {favoritePlayingToday && (
+        <div className="mb-3 flex items-center gap-1.5 text-[12px] font-semibold text-gold">
+          <Star size={12} className="fill-gold" />
+          ¡Hoy juega {favoriteTeamName}!
+        </div>
+      )}
+
       {!finished && match.totalMembers > 0 && (
         <div className="mb-3 text-[12px] text-ink-faint">
           {match.predictedCount} de {match.totalMembers}{" "}
@@ -105,7 +118,11 @@ export function MatchCard({
       <div className="flex items-center justify-between gap-1.5 sm:gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
           <TeamBadge name={match.homeTeam.name} uid={`${match.id}-home`} />
-          <span className="min-w-0 text-[13px] leading-tight font-semibold sm:text-sm">
+          <span
+            className={`min-w-0 text-[13px] leading-tight font-semibold sm:text-sm ${
+              isFavoriteHome ? "text-gold" : ""
+            }`}
+          >
             {match.homeTeam.name}
           </span>
         </div>
@@ -136,7 +153,11 @@ export function MatchCard({
 
         <div className="flex min-w-0 flex-1 flex-row-reverse items-center gap-1.5 text-right sm:gap-2">
           <TeamBadge name={match.awayTeam.name} uid={`${match.id}-away`} />
-          <span className="min-w-0 text-[13px] leading-tight font-semibold sm:text-sm">
+          <span
+            className={`min-w-0 text-[13px] leading-tight font-semibold sm:text-sm ${
+              isFavoriteAway ? "text-gold" : ""
+            }`}
+          >
             {match.awayTeam.name}
           </span>
         </div>
