@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Lock, Check, Star, Users, ChevronDown } from "lucide-react";
+import { Lock, Check, Star, Users, ChevronDown, CalendarClock } from "lucide-react";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { ScoreDial } from "@/components/ui/ScoreDial";
 import { savePrediction } from "@/app/clubs/[clubId]/partidos/actions";
@@ -90,14 +90,28 @@ export function MatchCard({
       )}
 
       <div className="mb-3 flex items-center justify-between">
-        <div className="text-xs text-ink-dim">{fmtDate(match.kickoff)}</div>
-        {match.locked && !finished && (
+        <div className="text-xs text-ink-dim">
+          {match.postponed ? "Nueva fecha por confirmar" : fmtDate(match.kickoff)}
+        </div>
+        {match.postponed && (
+          <div className="flex items-center gap-1 text-[11px] text-gold-dim">
+            <CalendarClock size={11} /> APLAZADO
+          </div>
+        )}
+        {match.locked && !finished && !match.postponed && (
           <div className="flex items-center gap-1 text-[11px] text-gold-dim">
             <Lock size={11} /> CERRADO
           </div>
         )}
         {finished && <div className="text-[11px] text-ink-faint">FINAL</div>}
       </div>
+
+      {match.postponed && (
+        <div className="mb-3 rounded-md border border-line-strong bg-card-hover px-3 py-2 text-[12px] text-ink-dim">
+          Este partido fue aplazado. Las predicciones siguen abiertas hasta que se confirme la
+          nueva fecha.
+        </div>
+      )}
 
       {favoritePlayingToday && (
         <div className="mb-3 flex items-center gap-1.5 text-[12px] font-semibold text-gold">

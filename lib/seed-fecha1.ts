@@ -71,7 +71,9 @@ export async function seedFecha1() {
     const externalFixtureId = `betplay-2026ii-f1-${home}-${away}`;
     await prisma.match.upsert({
       where: { externalFixtureId },
-      update: { kickoff: new Date(kickoffIso), status: "SCHEDULED" },
+      // Never touch an existing row: admin corrections (postponements,
+      // rescheduled kickoffs, results) must survive a re-run of this seed.
+      update: {},
       create: {
         jornadaId: jornada1.id,
         homeTeamId: teams[home].id,

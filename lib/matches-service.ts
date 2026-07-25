@@ -14,6 +14,7 @@ export type MatchView = {
   jornadaLabel: string | null;
   locked: boolean;
   started: boolean;
+  postponed: boolean;
   isNext: boolean;
   isToday: boolean;
   myPrediction: { homeScore: number; awayScore: number } | null;
@@ -45,7 +46,12 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
   const myPredictionMap = new Map(myPredictions.map((p) => [p.matchId, p]));
   const memberIds = memberships.map((m) => m.userId);
 
-  const notFinished = matches.filter((m) => m.status !== "FINISHED");
+  // Postponed/cancelled matches have no real kickoff anymore (Dimayor hasn't
+  // announced a make-up date yet), so they're excluded from "next match" and
+  // never lock — predictions stay open until someone sets a real date.
+  const notFinished = matches.filter(
+    (m) => m.status !== "FINISHED" && m.status !== "POSTPONED" && m.status !== "CANCELLED",
+  );
   const futureKickoffs = notFinished
     .map((m) => m.kickoff.getTime())
     .filter((t) => t > now.getTime());
@@ -70,7 +76,10 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
   // locked (nobody can submit or change a prediction anymore, so seeing
   // others' picks can't influence anyone's own) — never before.
   const lockedMatchIds = matches
-    .filter((m) => m.status === "FINISHED" || isLocked(m.kickoff, now))
+    .filter((m) => {
+      if (m.status === "POSTPONED" || m.status === "CANCELLED") return false;
+      return m.status === "FINISHED" || isLocked(m.kickoff, now);
+    })
     .map((m) => m.id);
   const lockedPredictions = lockedMatchIds.length
     ? await prisma.prediction.findMany({
@@ -84,9 +93,10 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
   }
 
   const views: MatchView[] = matches.map((m) => {
-    const started = m.status === "FINISHED" || isStarted(m.kickoff, now);
-    const locked = m.status === "FINISHED" || isLocked(m.kickoff, now);
-    const withinWarning = !started && isWithinWarningWindow(m.kickoff, now);
+    const postponed = m.status === "POSTPONED" || m.status === "CANCELLED";
+    const started = !postponed && (m.status === "FINISHED" || isStarted(m.kickoff, now));
+    const locked = !postponed && (m.status === "FINISHED" || isLocked(m.kickoff, now));
+    const withinWarning = !postponed && !started && isWithinWarningWindow(m.kickoff, now);
     const mine = myPredictionMap.get(m.id) ?? null;
     const predictedIds = existenceIndex.get(m.id);
     const predsForMatch = predictionIndex.get(m.id);
@@ -130,8 +140,9 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
       jornadaLabel: m.jornada.label,
       locked,
       started,
-      isNext: nextKickoffMs != null && m.kickoff.getTime() === nextKickoffMs && m.status !== "FINISHED",
-      isToday: isSameColombiaDay(m.kickoff, now),
+      postponed,
+      isNext: !postponed && nextKickoffMs != null && m.kickoff.getTime() === nextKickoffMs,
+      isToday: !postponed && isSameColombiaDay(m.kickoff, now),
       myPrediction: mine,
       myPoints,
       selfMissingWarning: withinWarning && !mine,
