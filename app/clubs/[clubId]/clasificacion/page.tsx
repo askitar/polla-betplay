@@ -1,7 +1,9 @@
 import { Star, Target, CircleCheck, Circle } from "lucide-react";
 import { getClubLeaderboard } from "@/lib/leaderboard-service";
+import { getClubMemberStatsMap } from "@/lib/player-stats-service";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { EmptyNote } from "@/components/ui/EmptyNote";
+import { LeaderboardList } from "@/components/leaderboard/LeaderboardList";
 
 export default async function ClasificacionPage({
   params,
@@ -9,49 +11,20 @@ export default async function ClasificacionPage({
   params: Promise<{ clubId: string }>;
 }) {
   const { clubId } = await params;
-  const leaderboard = await getClubLeaderboard(clubId);
+  const [leaderboard, statsByUserMap] = await Promise.all([
+    getClubLeaderboard(clubId),
+    getClubMemberStatsMap(clubId),
+  ]);
+  const statsByUser = Object.fromEntries(statsByUserMap);
 
   return (
     <div>
       <SectionLabel>Tabla de posiciones</SectionLabel>
+      <p className="mb-2.5 text-xs text-ink-faint">Toca un jugador para ver el detalle de sus puntos.</p>
       <div className="card">
-        {leaderboard.map((entry, i) => (
-          <div
-            key={entry.userId}
-            className={`flex items-center gap-3 px-1 py-3 ${
-              i < leaderboard.length - 1 ? "border-b border-line" : ""
-            }`}
-          >
-            <div
-              className={`w-7 text-center font-display text-lg ${
-                i === 0 ? "text-gold" : "text-ink-faint"
-              }`}
-            >
-              {i + 1}
-            </div>
-            <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-line-strong bg-card-hover">
-              {entry.userImage ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={entry.userImage} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <span className="flex h-full w-full items-center justify-center font-condensed text-xs text-ink-dim">
-                  {entry.userName.slice(0, 2).toUpperCase()}
-                </span>
-              )}
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-1.5 text-[15px] font-semibold">
-                {entry.userName}
-                {i === 0 && entry.points > 0 && <Star size={13} className="fill-gold text-gold" />}
-              </div>
-              <div className="text-xs text-ink-dim">
-                {entry.played} predicciones · {entry.exact} exactas
-              </div>
-            </div>
-            <div className="font-display text-2xl text-gold">{entry.points}</div>
-          </div>
-        ))}
-        {leaderboard.length === 0 && (
+        {leaderboard.length > 0 ? (
+          <LeaderboardList leaderboard={leaderboard} statsByUser={statsByUser} />
+        ) : (
           <EmptyNote>
             Todavía nadie tiene puntos. Se suman cuando se cargan resultados finales.
           </EmptyNote>
@@ -75,7 +48,8 @@ export default async function ClasificacionPage({
             <div>
               <div className="text-[13px] font-semibold">Ganador o empate acertado</div>
               <div className="text-xs text-ink-dim">
-                No aciertas el marcador exacto, pero sí quién gana o si es empate.
+                No aciertas el marcador exacto, pero sí quién gana o si es empate. Se puede
+                combinar con gol acertado.
               </div>
             </div>
           </div>
@@ -88,7 +62,7 @@ export default async function ClasificacionPage({
               <div className="text-[13px] font-semibold">Gol acertado</div>
               <div className="text-xs text-ink-dim">
                 No aciertas el marcador exacto, pero sí el número de goles de uno de los dos
-                equipos.
+                equipos. Se puede combinar con ganador o empate acertado.
               </div>
             </div>
           </div>
@@ -109,10 +83,13 @@ export default async function ClasificacionPage({
         </div>
       </div>
       <p className="mt-2.5 text-xs leading-relaxed text-ink-faint">
-        Solo cuenta la categoría más alta que apliques entre marcador exacto, ganador/empate y
-        gol (no se suman entre sí). Las predicciones se cierran 10 minutos antes del pitazo
-        inicial; desde ese momento puedes ver las del resto del club tocando &quot;Predicciones
-        jugadores&quot; en cada partido, para que nadie se copie antes.
+        Ganador/empate y gol acertado se pueden combinar en un mismo partido: por ejemplo, si el
+        resultado real es 2-1 y predices 2-0, ganas los 2 puntos por acertar el ganador más 1
+        punto por acertar el gol del local, +3 en total. Marcador exacto es aparte: si aciertas el
+        marcador exacto no se suman los otros dos, solo los 5 puntos (más los 2 de predicción
+        única si aplica). Las predicciones se cierran 10 minutos antes del pitazo inicial; desde
+        ese momento puedes ver las del resto del club tocando &quot;Predicciones jugadores&quot;
+        en cada partido, para que nadie se copie antes.
       </p>
 
       <SectionLabel className="mt-7">Criterios de desempate</SectionLabel>

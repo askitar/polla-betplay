@@ -199,11 +199,13 @@ export function MatchCard({
             ? "🎯⭐ exacto y único, +7"
             : match.myPoints === 5
               ? "🎯 exacto, +5"
-              : match.myPoints === 2
-                ? "✔ ganador correcto, +2"
-                : match.myPoints === 1
-                  ? "⚽ gol acertado, +1"
-                  : "sin puntos"}
+              : match.myPoints === 3
+                ? "✔⚽ ganador y gol acertado, +3"
+                : match.myPoints === 2
+                  ? "✔ ganador correcto, +2"
+                  : match.myPoints === 1
+                    ? "⚽ gol acertado, +1"
+                    : "sin puntos"}
         </div>
       )}
 
