@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { isLocked, isStarted, isWithinWarningWindow, isSameColombiaDay } from "@/lib/match-time";
+import { computeClubMatchPoints } from "@/lib/scoring";
 
 export type MatchView = {
   id: string;
@@ -16,6 +17,7 @@ export type MatchView = {
   isNext: boolean;
   isToday: boolean;
   myPrediction: { homeScore: number; awayScore: number } | null;
+  myPoints: number | null;
   selfMissingWarning: boolean;
   membersReveal: Array<{
     userId: string;
@@ -91,6 +93,18 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
 
     let membersReveal: MatchView["membersReveal"] = null;
     let missingMemberNames: string[] | null = null;
+    let myPoints: number | null = null;
+
+    if (m.status === "FINISHED" && m.homeScore != null && m.awayScore != null) {
+      const pointsByUser = computeClubMatchPoints(
+        { homeScore: m.homeScore, awayScore: m.awayScore },
+        memberships.map((mem) => ({
+          userId: mem.userId,
+          prediction: predsForMatch?.get(mem.userId) ?? null,
+        })),
+      );
+      myPoints = mine ? (pointsByUser.get(userId) ?? null) : null;
+    }
 
     if (locked) {
       membersReveal = memberships.map((mem) => ({
@@ -119,6 +133,7 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
       isNext: nextKickoffMs != null && m.kickoff.getTime() === nextKickoffMs && m.status !== "FINISHED",
       isToday: isSameColombiaDay(m.kickoff, now),
       myPrediction: mine,
+      myPoints,
       selfMissingWarning: withinWarning && !mine,
       membersReveal,
       missingMemberNames,

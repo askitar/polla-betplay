@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { computePoints } from "@/lib/scoring";
+import { POINTS, computeClubMatchPoints } from "@/lib/scoring";
 
 export type LeaderboardEntry = {
   userId: string;
@@ -32,29 +32,42 @@ export async function getClubLeaderboard(clubId: string): Promise<LeaderboardEnt
     predictionIndex.get(p.userId)!.set(p.matchId, { homeScore: p.homeScore, awayScore: p.awayScore });
   }
 
-  const entries: LeaderboardEntry[] = memberships.map((mem) => {
-    let points = 0;
-    let played = 0;
-    let exact = 0;
+  const totals = new Map<string, { points: number; played: number; exact: number }>();
+  for (const mem of memberships) totals.set(mem.userId, { points: 0, played: 0, exact: 0 });
 
-    for (const match of finishedMatches) {
-      if (match.homeScore == null || match.awayScore == null) continue;
+  for (const match of finishedMatches) {
+    if (match.homeScore == null || match.awayScore == null) continue;
+
+    const memberPredictions = memberships.map((mem) => ({
+      userId: mem.userId,
+      prediction: predictionIndex.get(mem.userId)?.get(match.id) ?? null,
+    }));
+    const pointsByUser = computeClubMatchPoints(
+      { homeScore: match.homeScore, awayScore: match.awayScore },
+      memberPredictions,
+    );
+
+    for (const mem of memberships) {
       const pred = predictionIndex.get(mem.userId)?.get(match.id);
       if (!pred) continue;
 
-      played++;
-      const score = computePoints(pred, { homeScore: match.homeScore, awayScore: match.awayScore });
-      points += score ?? 0;
-      if (score === 3) exact++;
+      const entry = totals.get(mem.userId)!;
+      entry.played++;
+      const score = pointsByUser.get(mem.userId) ?? 0;
+      entry.points += score;
+      if (score === POINTS.EXACT || score === POINTS.EXACT + POINTS.UNIQUE_BONUS) entry.exact++;
     }
+  }
 
+  const entries: LeaderboardEntry[] = memberships.map((mem) => {
+    const t = totals.get(mem.userId)!;
     return {
       userId: mem.userId,
       userName: mem.user.name ?? "Sin nombre",
       userImage: mem.user.image,
-      points,
-      played,
-      exact,
+      points: t.points,
+      played: t.played,
+      exact: t.exact,
     };
   });
 

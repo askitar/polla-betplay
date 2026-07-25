@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { Lock, Check, Star, Users, ChevronDown } from "lucide-react";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { ScoreDial } from "@/components/ui/ScoreDial";
-import { computePoints } from "@/lib/scoring";
 import { savePrediction } from "@/app/clubs/[clubId]/partidos/actions";
 import { AdminResultForm } from "@/components/match/AdminResultForm";
 import { CountdownTimer } from "@/components/match/CountdownTimer";
@@ -66,14 +65,6 @@ export function MatchCard({
       }
     });
   }
-
-  const pointsEarned =
-    finished && match.homeScore != null && match.awayScore != null
-      ? computePoints(match.myPrediction, {
-          homeScore: match.homeScore,
-          awayScore: match.awayScore,
-        })
-      : null;
 
   const isFavoriteHome = favoriteTeamName != null && match.homeTeam.name === favoriteTeamName;
   const isFavoriteAway = favoriteTeamName != null && match.awayTeam.name === favoriteTeamName;
@@ -204,13 +195,15 @@ export function MatchCard({
       {finished && match.myPrediction && (
         <div className="mt-2.5 text-xs text-ink-dim">
           Tu predicción: {match.myPrediction.homeScore}–{match.myPrediction.awayScore} ·{" "}
-          {pointsEarned === 5
-            ? "🎯 exacto, +5"
-            : pointsEarned === 2
-              ? "✔ ganador correcto, +2"
-              : pointsEarned === 1
-                ? "⚽ gol acertado, +1"
-                : "sin puntos"}
+          {match.myPoints === 7
+            ? "🎯⭐ exacto y único, +7"
+            : match.myPoints === 5
+              ? "🎯 exacto, +5"
+              : match.myPoints === 2
+                ? "✔ ganador correcto, +2"
+                : match.myPoints === 1
+                  ? "⚽ gol acertado, +1"
+                  : "sin puntos"}
         </div>
       )}
 
