@@ -160,6 +160,9 @@ model Match {
   resultSource      ResultSource?
   externalFixtureId String?       @unique
   lastSyncedAt      DateTime?
+  // Only meaningful while status = LIVE; cleared once FINISHED.
+  liveMinute Int?
+  livePeriod String?
 
   jornada     Jornada      @relation(fields: [jornadaId], references: [id], onDelete: Cascade)
   homeTeam    Team         @relation("HomeTeam", fields: [homeTeamId], references: [id])

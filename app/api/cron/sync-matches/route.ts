@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Receiver } from "@upstash/qstash";
 import { prisma } from "@/lib/prisma";
-import { syncFixtures } from "@/lib/api-football";
+import { syncHighlightlyToday } from "@/lib/highlightly";
 
 const receiver =
   process.env.QSTASH_CURRENT_SIGNING_KEY && process.env.QSTASH_NEXT_SIGNING_KEY
@@ -29,21 +29,28 @@ export async function POST(request: Request) {
   }
 
   const now = new Date();
-  const windowStart = new Date(now.getTime() - 3 * 60 * 60_000);
-  const windowEnd = new Date(now.getTime() + 15 * 60_000);
+  // A match takes roughly 100-130 minutes kickoff to final whistle
+  // (90 + stoppage + halftime). Only call out to Highlightly (100
+  // requests/day on the free plan) while a match is plausibly in that
+  // window or already marked LIVE — everything else is a free no-op.
+  const windowStart = new Date(now.getTime() - 10 * 60_000);
+  const windowEnd = new Date(now.getTime() + 130 * 60_000);
 
-  // Stay well under the free API tier by only calling out when there's
-  // actually a match near its kickoff window.
-  const hasNearbyMatch = await prisma.match.count({
-    where: { kickoff: { gte: windowStart, lte: windowEnd }, status: { not: "FINISHED" } },
+  const hasRelevantMatch = await prisma.match.count({
+    where: {
+      OR: [
+        { status: "LIVE" },
+        { status: "SCHEDULED", kickoff: { gte: windowStart, lte: windowEnd } },
+      ],
+    },
   });
 
-  if (hasNearbyMatch === 0) {
-    return NextResponse.json({ skipped: true, reason: "No hay partidos cerca de su horario." });
+  if (hasRelevantMatch === 0) {
+    return NextResponse.json({ skipped: true, reason: "No hay partidos en vivo ni cerca de su horario." });
   }
 
   try {
-    const result = await syncFixtures();
+    const result = await syncHighlightlyToday(now);
     return NextResponse.json(result);
   } catch (e) {
     return NextResponse.json(

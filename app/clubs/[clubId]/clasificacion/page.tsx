@@ -4,6 +4,7 @@ import { getClubMemberStatsMap } from "@/lib/player-stats-service";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { EmptyNote } from "@/components/ui/EmptyNote";
 import { LeaderboardList } from "@/components/leaderboard/LeaderboardList";
+import { LiveRefresher } from "@/components/live/LiveRefresher";
 
 export default async function ClasificacionPage({
   params,
@@ -11,7 +12,7 @@ export default async function ClasificacionPage({
   params: Promise<{ clubId: string }>;
 }) {
   const { clubId } = await params;
-  const [leaderboard, statsByUserMap] = await Promise.all([
+  const [{ entries: leaderboard, hasLiveMatch }, statsByUserMap] = await Promise.all([
     getClubLeaderboard(clubId),
     getClubMemberStatsMap(clubId),
   ]);
@@ -19,8 +20,18 @@ export default async function ClasificacionPage({
 
   return (
     <div>
+      <LiveRefresher active={hasLiveMatch} />
       <SectionLabel>Tabla de posiciones</SectionLabel>
       <p className="mb-2.5 text-xs text-ink-faint">Toca un jugador para ver el detalle de sus puntos.</p>
+      {hasLiveMatch && (
+        <div className="mb-2.5 flex items-center gap-1.5 text-[12px] font-semibold text-flag-red">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-flag-red opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-flag-red" />
+          </span>
+          Puntaje en vivo — puede cambiar mientras el partido continúa
+        </div>
+      )}
       <div className="card">
         {leaderboard.length > 0 ? (
           <LeaderboardList leaderboard={leaderboard} statsByUser={statsByUser} />

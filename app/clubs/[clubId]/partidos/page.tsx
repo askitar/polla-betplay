@@ -10,6 +10,7 @@ import { EmptyNote } from "@/components/ui/EmptyNote";
 import { MatchCard } from "@/components/match/MatchCard";
 import { JornadaSwitcher } from "@/components/match/JornadaSwitcher";
 import { CountdownTimer } from "@/components/match/CountdownTimer";
+import { LiveRefresher } from "@/components/live/LiveRefresher";
 
 export default async function PartidosPage({
   params,
@@ -24,7 +25,7 @@ export default async function PartidosPage({
   const { clubId } = await params;
   const { fecha } = await searchParams;
 
-  const [allMatches, membership, leaderboard, me] = await Promise.all([
+  const [allMatches, membership, { entries: leaderboard, hasLiveMatch }, me] = await Promise.all([
     getClubMatchesView(clubId, session.user.id),
     prisma.membership.findUnique({
       where: { userId_clubId: { userId: session.user.id, clubId } },
@@ -55,6 +56,7 @@ export default async function PartidosPage({
 
   return (
     <div className="lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
+      <LiveRefresher active={hasLiveMatch} />
       <div>
         <JornadaSwitcher clubId={clubId} jornadas={jornadas} current={currentJornada} />
 

@@ -8,6 +8,7 @@ export type PlayerMatchDetail = {
   homeScore: number;
   awayScore: number;
   kickoff: Date;
+  isLive: boolean;
   predictionHome: number;
   predictionAway: number;
   exact: boolean;
@@ -47,16 +48,18 @@ export async function getClubMemberStatsMap(clubId: string): Promise<Map<string,
   });
   const memberIds = memberships.map((m) => m.userId);
 
-  const finishedMatches = await prisma.match.findMany({
-    where: { status: "FINISHED" },
+  // LIVE matches are included using their current score — provisional, so a
+  // player's per-match breakdown here can still change until the match ends.
+  const scoredMatches = await prisma.match.findMany({
+    where: { status: { in: ["FINISHED", "LIVE"] } },
     include: { homeTeam: true, awayTeam: true },
     orderBy: { kickoff: "desc" },
   });
-  const finishedIds = finishedMatches.map((m) => m.id);
+  const scoredIds = scoredMatches.map((m) => m.id);
 
-  const predictions = finishedIds.length
+  const predictions = scoredIds.length
     ? await prisma.prediction.findMany({
-        where: { userId: { in: memberIds }, matchId: { in: finishedIds } },
+        where: { userId: { in: memberIds }, matchId: { in: scoredIds } },
       })
     : [];
   const predictionIndex = new Map<string, Map<string, { homeScore: number; awayScore: number }>>();
@@ -83,7 +86,7 @@ export async function getClubMemberStatsMap(clubId: string): Promise<Map<string,
     });
   }
 
-  for (const match of finishedMatches) {
+  for (const match of scoredMatches) {
     if (match.homeScore == null || match.awayScore == null) continue;
     const predsForMatch = predictionIndex.get(match.id);
 
@@ -106,6 +109,7 @@ export async function getClubMemberStatsMap(clubId: string): Promise<Map<string,
         homeScore: match.homeScore,
         awayScore: match.awayScore,
         kickoff: match.kickoff,
+        isLive: match.status === "LIVE",
         predictionHome: pred.homeScore,
         predictionAway: pred.awayScore,
         exact: b.exact,

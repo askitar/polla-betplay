@@ -10,15 +10,23 @@ export type LeaderboardEntry = {
   exact: number;
 };
 
-export async function getClubLeaderboard(clubId: string): Promise<LeaderboardEntry[]> {
+export async function getClubLeaderboard(
+  clubId: string,
+): Promise<{ entries: LeaderboardEntry[]; hasLiveMatch: boolean }> {
   const memberships = await prisma.membership.findMany({
     where: { clubId },
     include: { user: { select: { id: true, name: true, image: true } } },
   });
   const memberIds = memberships.map((m) => m.userId);
 
-  const finishedMatches = await prisma.match.findMany({ where: { status: "FINISHED" } });
-  const finishedIds = finishedMatches.map((m) => m.id);
+  // LIVE matches count toward the table too, using their current
+  // (not-yet-final) score — provisional points that move as the match does,
+  // for excitement, replaced by the real result once the match ends.
+  const scoredMatches = await prisma.match.findMany({
+    where: { status: { in: ["FINISHED", "LIVE"] } },
+  });
+  const finishedIds = scoredMatches.map((m) => m.id);
+  const hasLiveMatch = scoredMatches.some((m) => m.status === "LIVE");
 
   const predictions = finishedIds.length
     ? await prisma.prediction.findMany({
@@ -35,7 +43,7 @@ export async function getClubLeaderboard(clubId: string): Promise<LeaderboardEnt
   const totals = new Map<string, { points: number; played: number; exact: number }>();
   for (const mem of memberships) totals.set(mem.userId, { points: 0, played: 0, exact: 0 });
 
-  for (const match of finishedMatches) {
+  for (const match of scoredMatches) {
     if (match.homeScore == null || match.awayScore == null) continue;
 
     const memberPredictions = memberships.map((mem) => ({
@@ -71,5 +79,6 @@ export async function getClubLeaderboard(clubId: string): Promise<LeaderboardEnt
     };
   });
 
-  return entries.sort((a, b) => b.points - a.points || b.exact - a.exact);
+  entries.sort((a, b) => b.points - a.points || b.exact - a.exact);
+  return { entries, hasLiveMatch };
 }

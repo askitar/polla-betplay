@@ -15,10 +15,14 @@ export type MatchView = {
   locked: boolean;
   started: boolean;
   postponed: boolean;
+  live: boolean;
+  liveMinute: number | null;
+  livePeriod: string | null;
   isNext: boolean;
   isToday: boolean;
   myPrediction: { homeScore: number; awayScore: number } | null;
   myPoints: number | null;
+  myPointsIsLive: boolean;
   selfMissingWarning: boolean;
   membersReveal: Array<{
     userId: string;
@@ -105,7 +109,10 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
     let missingMemberNames: string[] | null = null;
     let myPoints: number | null = null;
 
-    if (m.status === "FINISHED" && m.homeScore != null && m.awayScore != null) {
+    // While LIVE, score the current (not-yet-final) result too, so the
+    // leaderboard can show provisional points that move with the match —
+    // purely for excitement, the real score still wins once FINISHED.
+    if ((m.status === "FINISHED" || m.status === "LIVE") && m.homeScore != null && m.awayScore != null) {
       const pointsByUser = computeClubMatchPoints(
         { homeScore: m.homeScore, awayScore: m.awayScore },
         memberships.map((mem) => ({
@@ -141,10 +148,14 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
       locked,
       started,
       postponed,
+      live: m.status === "LIVE",
+      liveMinute: m.status === "LIVE" ? m.liveMinute : null,
+      livePeriod: m.status === "LIVE" ? m.livePeriod : null,
       isNext: !postponed && nextKickoffMs != null && m.kickoff.getTime() === nextKickoffMs,
       isToday: !postponed && isSameColombiaDay(m.kickoff, now),
       myPrediction: mine,
       myPoints,
+      myPointsIsLive: m.status === "LIVE",
       selfMissingWarning: withinWarning && !mine,
       membersReveal,
       missingMemberNames,

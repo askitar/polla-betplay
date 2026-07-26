@@ -21,6 +21,21 @@ function fmtDate(iso: Date | string) {
   return `${datePart} · ${timePart}`;
 }
 
+const LIVE_PERIOD_LABELS: Record<string, string> = {
+  "First half": "Primer tiempo",
+  Halftime: "Entretiempo",
+  "Second half": "Segundo tiempo",
+  "Extra time": "Tiempo extra",
+  Penalties: "Penales",
+  Interrupted: "Interrumpido",
+  Suspended: "Suspendido",
+};
+
+function fmtLivePeriod(period: string | null, minute: number | null) {
+  const label = (period && LIVE_PERIOD_LABELS[period]) || period || "En vivo";
+  return minute != null ? `${label} · ${minute}'` : label;
+}
+
 export function MatchCard({
   clubId,
   match,
@@ -91,14 +106,27 @@ export function MatchCard({
 
       <div className="mb-3 flex items-center justify-between">
         <div className="text-xs text-ink-dim">
-          {match.postponed ? "Nueva fecha por confirmar" : fmtDate(match.kickoff)}
+          {match.postponed
+            ? "Nueva fecha por confirmar"
+            : match.live
+              ? fmtLivePeriod(match.livePeriod, match.liveMinute)
+              : fmtDate(match.kickoff)}
         </div>
+        {match.live && (
+          <div className="flex items-center gap-1.5 text-[11px] font-bold text-flag-red">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-flag-red opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-flag-red" />
+            </span>
+            EN VIVO
+          </div>
+        )}
         {match.postponed && (
           <div className="flex items-center gap-1 text-[11px] text-gold-dim">
             <CalendarClock size={11} /> APLAZADO
           </div>
         )}
-        {match.locked && !finished && !match.postponed && (
+        {match.locked && !finished && !match.postponed && !match.live && (
           <div className="flex items-center gap-1 text-[11px] text-gold-dim">
             <Lock size={11} /> CERRADO
           </div>
@@ -139,7 +167,7 @@ export function MatchCard({
           </span>
         </div>
 
-        {finished ? (
+        {finished || match.live ? (
           <div className="flex items-center gap-2.5 font-display text-[30px]">
             <span>{match.homeScore}</span>
             <span className="text-line-strong">–</span>

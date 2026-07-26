@@ -64,7 +64,7 @@ export function PlayerStatsPanel({ stats }: { stats: PlayerStats }) {
       </div>
 
       {matches.length === 0 ? (
-        <p className="py-2 text-xs text-ink-faint">Aún no tiene predicciones en partidos finalizados.</p>
+        <p className="py-2 text-xs text-ink-faint">Aún no tiene predicciones en partidos jugados o en vivo.</p>
       ) : tab === "resumen" ? (
         <div>
           <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 pb-1.5 text-[10px] tracking-wide text-ink-faint">
@@ -111,7 +111,17 @@ export function PlayerStatsPanel({ stats }: { stats: PlayerStats }) {
           {matches.map((m) => (
             <div key={m.matchId} className="rounded-md border border-line px-3 py-2.5">
               <div className="mb-1.5 flex items-center justify-between">
-                <span className="text-[11px] text-ink-faint">{fmtDate(m.kickoff)}</span>
+                {m.isLive ? (
+                  <span className="flex items-center gap-1.5 text-[11px] font-bold text-flag-red">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-flag-red opacity-75" />
+                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-flag-red" />
+                    </span>
+                    EN VIVO · provisional
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-ink-faint">{fmtDate(m.kickoff)}</span>
+                )}
                 <span
                   className={`rounded px-1.5 py-0.5 font-display text-sm ${
                     m.points > 0 ? "bg-acierto/20 text-acierto" : "bg-line text-ink-faint"

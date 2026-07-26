@@ -24,7 +24,7 @@ export function isWithinWarningWindow(kickoff: Date, now: Date = new Date()): bo
 // timezone (Vercel runs in UTC).
 const COLOMBIA_OFFSET_MS = -5 * 60 * 60 * 1000;
 
-function colombiaDateKey(d: Date): string {
+export function colombiaDateKey(d: Date): string {
   return new Date(d.getTime() + COLOMBIA_OFFSET_MS).toISOString().slice(0, 10);
 }
 
