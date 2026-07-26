@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { Receiver } from "@upstash/qstash";
 import { prisma } from "@/lib/prisma";
-import { syncHighlightlyToday } from "@/lib/highlightly";
+import { syncHighlightlyToday, checkPostponedMatches } from "@/lib/highlightly";
+import { COLOMBIA_OFFSET_MS } from "@/lib/match-time";
 
 const receiver =
   process.env.QSTASH_CURRENT_SIGNING_KEY && process.env.QSTASH_NEXT_SIGNING_KEY
@@ -52,13 +53,22 @@ export async function POST(request: Request) {
     },
   });
 
-  if (hasRelevantMatch === 0) {
+  // Postponed matches have no kickoff to compare against "now", so they'd
+  // never trip the window guard above — checked separately, once a day
+  // (colombia 08:00, the first of the day's 6-min ticks), one Highlightly
+  // call per postponed match instead of on every tick.
+  const colombiaNow = new Date(now.getTime() + COLOMBIA_OFFSET_MS);
+  const isDailyPostponedCheckWindow =
+    colombiaNow.getUTCHours() === 8 && colombiaNow.getUTCMinutes() < 6;
+
+  if (hasRelevantMatch === 0 && !isDailyPostponedCheckWindow) {
     return NextResponse.json({ skipped: true, reason: "No hay partidos en vivo ni cerca de su horario." });
   }
 
   try {
-    const result = await syncHighlightlyToday(now);
-    return NextResponse.json(result);
+    const sync = hasRelevantMatch > 0 ? await syncHighlightlyToday(now) : { skipped: true };
+    const postponedCheck = isDailyPostponedCheckWindow ? await checkPostponedMatches() : { skipped: true };
+    return NextResponse.json({ sync, postponedCheck });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Error desconocido." },

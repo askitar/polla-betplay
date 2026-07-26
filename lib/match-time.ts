@@ -22,7 +22,7 @@ export function isWithinWarningWindow(kickoff: Date, now: Date = new Date()): bo
 // Colombia has no DST and is always UTC-5, so a fixed offset is enough to
 // get the correct civil date in Bogotá regardless of the server's own
 // timezone (Vercel runs in UTC).
-const COLOMBIA_OFFSET_MS = -5 * 60 * 60 * 1000;
+export const COLOMBIA_OFFSET_MS = -5 * 60 * 60 * 1000;
 
 export function colombiaDateKey(d: Date): string {
   return new Date(d.getTime() + COLOMBIA_OFFSET_MS).toISOString().slice(0, 10);

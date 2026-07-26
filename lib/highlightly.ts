@@ -52,6 +52,7 @@ const STATUS_MAP: Record<string, "SCHEDULED" | "LIVE" | "FINISHED" | "POSTPONED"
 type HighlightlyMatch = {
   id: number;
   date: string;
+  round?: string;
   state: {
     clock: number | null;
     description: string;
@@ -60,6 +61,10 @@ type HighlightlyMatch = {
   homeTeam: { id: number; name: string };
   awayTeam: { id: number; name: string };
 };
+
+const NAME_TO_TEAM_ID: Record<string, number> = Object.fromEntries(
+  Object.entries(TEAM_ID_TO_NAME).map(([id, name]) => [name, Number(id)]),
+);
 
 async function fetchHighlightly(path: string, params: Record<string, string>) {
   const apiKey = process.env.HIGHLIGHTLY_API_KEY;
@@ -180,4 +185,81 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
     skippedUnmapped,
     skippedUnknownStatus,
   };
+}
+
+/**
+ * Once-a-day check (see the cron route's daily window guard) for matches
+ * we've marked POSTPONED: one Highlightly call per postponed match (by
+ * team id pair, no date filter, so it finds the fixture whenever Dimayor
+ * sets its date), and un-freezes it the moment a real status/date is
+ * known. Cheap since postponements are rare — normally 0-1 calls/day.
+ */
+export async function checkPostponedMatches() {
+  const leagueId = process.env.HIGHLIGHTLY_LEAGUE_ID;
+  if (!leagueId) throw new Error("Falta configurar HIGHLIGHTLY_LEAGUE_ID.");
+
+  const postponed = await prisma.match.findMany({
+    where: { status: "POSTPONED" },
+    include: { homeTeam: true, awayTeam: true },
+  });
+
+  let checked = 0;
+  let resolved = 0;
+  let stillPostponed = 0;
+  let skippedManual = 0;
+  let skippedUnmapped = 0;
+
+  for (const m of postponed) {
+    if (m.resultSource === "MANUAL") {
+      skippedManual++;
+      continue;
+    }
+
+    const homeId = NAME_TO_TEAM_ID[m.homeTeam.name];
+    const awayId = NAME_TO_TEAM_ID[m.awayTeam.name];
+    if (!homeId || !awayId) {
+      skippedUnmapped++;
+      continue;
+    }
+
+    const data = await fetchHighlightly("matches", {
+      leagueId,
+      homeTeamId: String(homeId),
+      awayTeamId: String(awayId),
+      season: "2026",
+    });
+    checked++;
+
+    const fixtures = (data.data ?? []) as HighlightlyMatch[];
+    const fixture = fixtures.find((f) => f.round?.startsWith("Clausura")) ?? fixtures[0];
+    const status = fixture ? STATUS_MAP[fixture.state.description] : undefined;
+
+    if (!fixture || !status || status === "POSTPONED") {
+      stillPostponed++;
+      continue;
+    }
+
+    const [rawHome, rawAway] = parseScore(fixture.state.score.current);
+
+    await prisma.match.update({
+      where: { id: m.id },
+      data: {
+        status,
+        kickoff: new Date(fixture.date),
+        lastSyncedAt: new Date(),
+        ...(status === "LIVE" || status === "FINISHED"
+          ? {
+              homeScore: rawHome,
+              awayScore: rawAway,
+              resultSource: "API" as const,
+              liveMinute: status === "LIVE" ? fixture.state.clock : null,
+              livePeriod: status === "LIVE" ? fixture.state.description : null,
+            }
+          : {}),
+      },
+    });
+    resolved++;
+  }
+
+  return { checked, resolved, stillPostponed, skippedManual, skippedUnmapped };
 }
