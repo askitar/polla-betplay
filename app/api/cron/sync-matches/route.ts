@@ -33,8 +33,15 @@ export async function POST(request: Request) {
   // (90 + stoppage + halftime). Only call out to Highlightly (100
   // requests/day on the free plan) while a match is plausibly in that
   // window or already marked LIVE — everything else is a free no-op.
-  const windowStart = new Date(now.getTime() - 10 * 60_000);
-  const windowEnd = new Date(now.getTime() + 130 * 60_000);
+  // NOTE: this is relative to each match's kickoff, not to "now" — a
+  // match that kicked off 45 minutes ago has kickoff = now - 45min, so
+  // the lookback bound must be the larger (130min) one and the
+  // lookahead bound the smaller (10min) one, or a match past its first
+  // 10 live minutes silently falls out of the window forever (it's
+  // then neither "LIVE" in our DB, since we never caught it, nor
+  // within a mis-shaped window) — this was previously backwards.
+  const windowStart = new Date(now.getTime() - 130 * 60_000);
+  const windowEnd = new Date(now.getTime() + 10 * 60_000);
 
   const hasRelevantMatch = await prisma.match.count({
     where: {
