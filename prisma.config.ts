@@ -9,6 +9,14 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    // Migrations need a session-scoped connection for their advisory
+    // lock; Neon's pooled DATABASE_URL (PgBouncer transaction mode)
+    // doesn't reliably support that, causing `prisma migrate deploy` to
+    // time out (P1002) even with no schema changes pending. This only
+    // affects the CLI (generate/migrate) — the running app connects with
+    // its own adapter using the pooled DATABASE_URL directly (see
+    // lib/prisma.ts), so this has no effect on runtime query performance.
+    // Falls back to DATABASE_URL locally, where the unpooled var isn't set.
+    url: process.env["DATABASE_URL_UNPOOLED"] || process.env["DATABASE_URL"],
   },
 });
