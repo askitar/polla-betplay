@@ -23,6 +23,7 @@ function fmtDate(iso: Date | string) {
 
 const LIVE_PERIOD_LABELS: Record<string, string> = {
   "First half": "Primer tiempo",
+  "Half time": "Entretiempo",
   Halftime: "Entretiempo",
   "Second half": "Segundo tiempo",
   "Extra time": "Tiempo extra",

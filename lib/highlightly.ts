@@ -31,9 +31,13 @@ const TEAM_ID_TO_NAME: Record<number, string> = {
   1244946: "Deportivo Pereira",
 };
 
+// Confirmed against real API responses, not just docs — "Half time" (with
+// a space) is what Highlightly actually sends, not "Halftime" as guessed
+// originally, which silently dropped every match sitting at the break.
 const STATUS_MAP: Record<string, "SCHEDULED" | "LIVE" | "FINISHED" | "POSTPONED" | "CANCELLED"> = {
   "Not started": "SCHEDULED",
   "First half": "LIVE",
+  "Half time": "LIVE",
   Halftime: "LIVE",
   "Second half": "LIVE",
   "Extra time": "LIVE",
