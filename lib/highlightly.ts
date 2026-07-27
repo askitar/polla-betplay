@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { colombiaDateKey } from "@/lib/match-time";
 
 const API_BASE = "https://soccer.highlightly.net";
 
@@ -91,18 +90,26 @@ function parseScore(current: string | null): [number | null, number | null] {
 }
 
 /**
- * Pulls today's (Colombia date) matches for the configured league and
- * updates status/live score/clock on the matches we already track — never
- * creates matches, jornadas, or teams. Matching is by team id (mapped to our
- * team names) since fixtures are already seeded by hand for this league.
- * MANUAL corrections are never touched, same guarantee as the old
- * API-Football sync.
+ * Pulls matches for the configured league and updates status/live
+ * score/clock on the matches we already track — never creates matches,
+ * jornadas, or teams. Matching is by team id (mapped to our team names)
+ * since fixtures are already seeded by hand for this league. MANUAL
+ * corrections are never touched, same guarantee as the old API-Football
+ * sync.
  */
 export async function syncHighlightlyToday(now: Date = new Date()) {
   const leagueId = process.env.HIGHLIGHTLY_LEAGUE_ID;
   if (!leagueId) throw new Error("Falta configurar HIGHLIGHTLY_LEAGUE_ID.");
 
-  const date = colombiaDateKey(now);
+  // Highlightly's `date` filter is a UTC calendar day, NOT a Colombia
+  // civil day — any kickoff at 19:00 COT or later (e.g. the usual 8:15pm
+  // slot) lands on the *next* UTC date. Querying colombiaDateKey(now)
+  // silently dropped every day's last match for its entire live window
+  // (it was never "today" as Highlightly counts it). `now`'s own raw UTC
+  // date is always correct for whatever's happening right now — the cron
+  // guard only ever calls this within ~10min of a match's real kickoff,
+  // so "now" and the match share the same UTC calendar day by then.
+  const date = now.toISOString().slice(0, 10);
   const data = await fetchHighlightly("matches", { leagueId, date });
   const fixtures = (data.data ?? []) as HighlightlyMatch[];
 
