@@ -173,10 +173,14 @@ export function groupJornadas(matches: MatchView[]) {
 }
 
 export function pickDefaultJornada(matches: MatchView[]): number {
-  const withUnfinished = matches
-    .filter((m) => m.status !== "FINISHED")
+  // A postponed match has no real kickoff to be "current" about and may sit
+  // unresolved for weeks — without excluding it here, its jornada would
+  // count as perpetually pending and trap the default view on that fecha
+  // forever, even once later fechas are already underway.
+  const withPending = matches
+    .filter((m) => m.status !== "FINISHED" && !m.postponed)
     .sort((a, b) => a.jornadaNumber - b.jornadaNumber);
-  if (withUnfinished.length) return withUnfinished[0].jornadaNumber;
+  if (withPending.length) return withPending[0].jornadaNumber;
   const numbers = groupJornadas(matches);
   return numbers.length ? numbers[numbers.length - 1] : 1;
 }

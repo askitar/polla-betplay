@@ -43,10 +43,11 @@ export default async function PartidosPage({
   const currentJornada = fecha ? Number(fecha) : pickDefaultJornada(allMatches);
 
   const matches = allMatches.filter((m) => m.jornadaNumber === currentJornada);
-  const upcoming = matches.filter((m) => m.status !== "FINISHED");
+  const upcoming = matches.filter((m) => m.status !== "FINISHED" && !m.postponed);
   const finished = matches
     .filter((m) => m.status === "FINISHED")
     .sort((a, b) => b.kickoff.getTime() - a.kickoff.getTime());
+  const postponed = matches.filter((m) => m.postponed);
 
   const today = upcoming.filter((m) => m.isToday);
   const later = upcoming.filter((m) => !m.isToday);
@@ -84,6 +85,15 @@ export default async function PartidosPage({
           <>
             <SectionLabel className="mt-2">Finalizados</SectionLabel>
             {finished.map((m) => (
+              <MatchCard key={m.id} clubId={clubId} match={m} isAdmin={isAdmin} favoriteTeamName={favoriteTeamName} />
+            ))}
+          </>
+        )}
+
+        {postponed.length > 0 && (
+          <>
+            <SectionLabel className="mt-2">Aplazados</SectionLabel>
+            {postponed.map((m) => (
               <MatchCard key={m.id} clubId={clubId} match={m} isAdmin={isAdmin} favoriteTeamName={favoriteTeamName} />
             ))}
           </>
