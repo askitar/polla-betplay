@@ -173,13 +173,19 @@ export function groupJornadas(matches: MatchView[]) {
 }
 
 export function pickDefaultJornada(matches: MatchView[]): number {
-  // A postponed match has no real kickoff to be "current" about and may sit
-  // unresolved for weeks — without excluding it here, its jornada would
-  // count as perpetually pending and trap the default view on that fecha
-  // forever, even once later fechas are already underway.
+  // Sorted by kickoff, not jornadaNumber: a rescheduled match keeps its
+  // original fecha number (e.g. a postponed Fecha 1 match resolved to a
+  // real date months later is still "Fecha 1"), so picking by the lowest
+  // jornadaNumber with a pending match would trap the default view on that
+  // long-finished fecha forever. Sorting by kickoff instead always lands on
+  // whichever fecha has the next real thing happening, regardless of what
+  // number Dimayor originally assigned it to.
+  //
+  // A postponed match has no real kickoff to sort by and may sit unresolved
+  // for weeks, so it's excluded the same way.
   const withPending = matches
     .filter((m) => m.status !== "FINISHED" && !m.postponed)
-    .sort((a, b) => a.jornadaNumber - b.jornadaNumber);
+    .sort((a, b) => a.kickoff.getTime() - b.kickoff.getTime());
   if (withPending.length) return withPending[0].jornadaNumber;
   const numbers = groupJornadas(matches);
   return numbers.length ? numbers[numbers.length - 1] : 1;
