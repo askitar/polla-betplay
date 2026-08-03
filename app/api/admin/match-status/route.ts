@@ -12,17 +12,69 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { externalFixtureId, status, kickoff } = body as {
-    externalFixtureId?: string;
-    status?: string;
-    kickoff?: string;
-  };
+  const { externalFixtureId, status, kickoff, homeTeamName, awayTeamName, homeScore, awayScore } =
+    body as {
+      externalFixtureId?: string;
+      status?: string;
+      kickoff?: string;
+      homeTeamName?: string;
+      awayTeamName?: string;
+      homeScore?: number;
+      awayScore?: number;
+    };
 
-  if (!externalFixtureId) {
-    return NextResponse.json({ error: "Falta externalFixtureId." }, { status: 400 });
-  }
   if (status && !VALID_STATUSES.includes(status as MatchStatus)) {
     return NextResponse.json({ error: "Status inválido." }, { status: 400 });
+  }
+  if (
+    (homeScore != null || awayScore != null) &&
+    (!Number.isInteger(homeScore) || !Number.isInteger(awayScore) || homeScore! < 0 || awayScore! < 0)
+  ) {
+    return NextResponse.json({ error: "Marcador inválido." }, { status: 400 });
+  }
+
+  // Score corrections (e.g. the API froze on a stale live score) don't have
+  // a reliable externalFixtureId to key off — our sync never stores one, it
+  // matches fixtures by team id pair every run instead — so this path finds
+  // the match by team names, same as syncHighlightlyToday, and freezes the
+  // fix with MANUAL so the sync can never clobber it back to the stale value.
+  if (homeTeamName && awayTeamName) {
+    const [homeTeam, awayTeam] = await Promise.all([
+      prisma.team.findUnique({ where: { name: homeTeamName } }),
+      prisma.team.findUnique({ where: { name: awayTeamName } }),
+    ]);
+    if (!homeTeam || !awayTeam) {
+      return NextResponse.json({ error: "Equipo no encontrado." }, { status: 400 });
+    }
+    const existing = await prisma.match.findFirst({
+      where: { homeTeamId: homeTeam.id, awayTeamId: awayTeam.id },
+      orderBy: { kickoff: "desc" },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: "Partido no encontrado." }, { status: 404 });
+    }
+    const match = await prisma.match.update({
+      where: { id: existing.id },
+      data: {
+        ...(homeScore != null ? { homeScore, awayScore, resultSource: "MANUAL" as const } : {}),
+        ...(status ? { status: status as MatchStatus } : {}),
+        ...(kickoff ? { kickoff: new Date(kickoff) } : {}),
+      },
+      include: { homeTeam: true, awayTeam: true },
+    });
+    return NextResponse.json({
+      id: match.id,
+      home: match.homeTeam.name,
+      away: match.awayTeam.name,
+      status: match.status,
+      homeScore: match.homeScore,
+      awayScore: match.awayScore,
+      kickoff: match.kickoff,
+    });
+  }
+
+  if (!externalFixtureId) {
+    return NextResponse.json({ error: "Falta externalFixtureId o homeTeamName/awayTeamName." }, { status: 400 });
   }
 
   const match = await prisma.match.update({
