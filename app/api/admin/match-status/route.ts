@@ -12,7 +12,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { externalFixtureId, status, kickoff, homeTeamName, awayTeamName, homeScore, awayScore } =
+  const { externalFixtureId, status, kickoff, homeTeamName, awayTeamName, homeScore, awayScore, unfreeze } =
     body as {
       externalFixtureId?: string;
       status?: string;
@@ -21,6 +21,7 @@ export async function POST(request: Request) {
       awayTeamName?: string;
       homeScore?: number;
       awayScore?: number;
+      unfreeze?: boolean;
     };
 
   if (status && !VALID_STATUSES.includes(status as MatchStatus)) {
@@ -57,6 +58,9 @@ export async function POST(request: Request) {
       where: { id: existing.id },
       data: {
         ...(homeScore != null ? { homeScore, awayScore, resultSource: "MANUAL" as const } : {}),
+        // Undo a wrong manual correction: clears the score and MANUAL freeze
+        // so syncHighlightlyToday can pick this match back up on its own.
+        ...(unfreeze ? { homeScore: null, awayScore: null, resultSource: null, liveMinute: null, livePeriod: null } : {}),
         ...(status ? { status: status as MatchStatus } : {}),
         ...(kickoff ? { kickoff: new Date(kickoff) } : {}),
       },
