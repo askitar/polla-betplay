@@ -55,11 +55,13 @@ export async function POST(request: Request) {
 
   // Postponed matches have no kickoff to compare against "now", so they'd
   // never trip the window guard above — checked separately, once a day
-  // (colombia 08:00, the first of the day's 6-min ticks), one Highlightly
-  // call per postponed match instead of on every tick.
+  // (colombia 08:00, the first of the day's 10-min ticks), one Highlightly
+  // call per postponed match instead of on every tick. The window must be
+  // at least as wide as the poll interval or a tick could land just past
+  // 08:10 and miss the day's only hit entirely.
   const colombiaNow = new Date(now.getTime() + COLOMBIA_OFFSET_MS);
   const isDailyPostponedCheckWindow =
-    colombiaNow.getUTCHours() === 8 && colombiaNow.getUTCMinutes() < 6;
+    colombiaNow.getUTCHours() === 8 && colombiaNow.getUTCMinutes() < 10;
 
   if (hasRelevantMatch === 0 && !isDailyPostponedCheckWindow) {
     return NextResponse.json({ skipped: true, reason: "No hay partidos en vivo ni cerca de su horario." });
