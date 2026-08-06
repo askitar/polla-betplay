@@ -107,15 +107,27 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
 
   // Highlightly's `date` filter is a UTC calendar day, NOT a Colombia
   // civil day — any kickoff at 19:00 COT or later (e.g. the usual 8:15pm
-  // slot) lands on the *next* UTC date. Querying colombiaDateKey(now)
-  // silently dropped every day's last match for its entire live window
-  // (it was never "today" as Highlightly counts it). `now`'s own raw UTC
-  // date is always correct for whatever's happening right now — the cron
-  // guard only ever calls this within ~10min of a match's real kickoff,
-  // so "now" and the match share the same UTC calendar day by then.
-  const date = now.toISOString().slice(0, 10);
-  const data = await fetchHighlightly("matches", { leagueId, date });
-  const fixtures = (data.data ?? []) as HighlightlyMatch[];
+  // slot, or even 6:15pm on a day it runs late) lands on a UTC date that
+  // can differ from "now"'s once the match's live window straddles UTC
+  // midnight (00:00 UTC = 7pm COT) — a match still LIVE past that point
+  // sits under *yesterday's* UTC date while "now" has already rolled over
+  // to today, so querying only now's date silently loses it mid-match.
+  // Querying each currently-LIVE match's own kickoff date too (usually
+  // the same as now's, so normally just one call) covers that case.
+  const liveMatches = await prisma.match.findMany({ where: { status: "LIVE" } });
+  const dates = new Set([now.toISOString().slice(0, 10)]);
+  for (const m of liveMatches) dates.add(m.kickoff.toISOString().slice(0, 10));
+
+  const fixtures: HighlightlyMatch[] = [];
+  const seenFixtureIds = new Set<number>();
+  for (const date of dates) {
+    const data = await fetchHighlightly("matches", { leagueId, date });
+    for (const f of (data.data ?? []) as HighlightlyMatch[]) {
+      if (seenFixtureIds.has(f.id)) continue;
+      seenFixtureIds.add(f.id);
+      fixtures.push(f);
+    }
+  }
 
   let updated = 0;
   let skippedManual = 0;
