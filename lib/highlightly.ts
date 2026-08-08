@@ -134,8 +134,21 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
   let skippedNoMatch = 0;
   let skippedUnmapped = 0;
   let skippedUnknownStatus = 0;
+  let skippedWrongStage = 0;
 
   for (const f of fixtures) {
+    // Highlightly has occasionally returned a stale Apertura (2026-I)
+    // fixture for a team pair under a Clausura-season date query — caught
+    // live when Fortaleza vs Cúcuta got marked FINISHED with January's
+    // Apertura score (1-1) days before the real Clausura match kicked off.
+    // We only ever track Clausura, so any fixture explicitly tagged as a
+    // different stage is skipped; fixtures with no round info still match
+    // as before.
+    if (f.round && !f.round.startsWith("Clausura")) {
+      skippedWrongStage++;
+      continue;
+    }
+
     const homeName = TEAM_ID_TO_NAME[f.homeTeam.id];
     const awayName = TEAM_ID_TO_NAME[f.awayTeam.id];
     if (!homeName || !awayName) {
@@ -207,6 +220,7 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
     skippedNoMatch,
     skippedUnmapped,
     skippedUnknownStatus,
+    skippedWrongStage,
   };
 }
 
