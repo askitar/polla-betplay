@@ -4,6 +4,33 @@ import type { MatchStatus } from "@/app/generated/prisma/client";
 
 const VALID_STATUSES: MatchStatus[] = ["SCHEDULED", "LIVE", "FINISHED", "POSTPONED", "CANCELLED"];
 
+// Read-only dump for full-season audits — same shared-secret protection as
+// the POST corrections below.
+export async function GET(request: Request) {
+  if (request.headers.get("x-cron-secret") !== process.env.CRON_SHARED_SECRET) {
+    return NextResponse.json({ error: "No autorizado." }, { status: 401 });
+  }
+
+  const matches = await prisma.match.findMany({
+    include: { homeTeam: true, awayTeam: true, jornada: true },
+    orderBy: { kickoff: "asc" },
+  });
+
+  return NextResponse.json(
+    matches.map((m) => ({
+      id: m.id,
+      jornada: m.jornada.number,
+      home: m.homeTeam.name,
+      away: m.awayTeam.name,
+      kickoff: m.kickoff,
+      status: m.status,
+      homeScore: m.homeScore,
+      awayScore: m.awayScore,
+      resultSource: m.resultSource,
+    })),
+  );
+}
+
 // One-off admin correction (postponements, rescheduled kickoffs) — protected
 // by the same shared secret as the cron route so it isn't publicly callable.
 export async function POST(request: Request) {
