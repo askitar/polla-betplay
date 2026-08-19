@@ -42,11 +42,13 @@ export function MatchCard({
   match,
   isAdmin = false,
   favoriteTeamName = null,
+  showJornada = false,
 }: {
   clubId: string;
   match: MatchView;
   isAdmin?: boolean;
   favoriteTeamName?: string | null;
+  showJornada?: boolean;
 }) {
   const [draft, setDraft] = useState<{ home: number | null; away: number | null }>({
     home: match.myPrediction?.homeScore ?? null,
@@ -106,7 +108,12 @@ export function MatchCard({
       )}
 
       <div className="mb-3 flex items-center justify-between">
-        <div className="text-xs text-ink-dim">
+        <div className="flex items-center gap-1.5 text-xs text-ink-dim">
+          {showJornada && (
+            <span className="rounded bg-card-hover px-1.5 py-0.5 font-condensed text-[10px] tracking-wide text-gold-dim">
+              FECHA {match.jornadaNumber}
+            </span>
+          )}
           {match.postponed
             ? "Nueva fecha por confirmar"
             : match.live

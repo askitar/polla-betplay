@@ -49,7 +49,13 @@ export default async function PartidosPage({
     .sort((a, b) => b.kickoff.getTime() - a.kickoff.getTime());
   const postponed = matches.filter((m) => m.postponed);
 
-  const today = upcoming.filter((m) => m.isToday);
+  // "Hoy" pulls from every fecha, not just the one currently selected — a
+  // rescheduled match (postponed elsewhere, resolved to a real date today)
+  // can land on any fecha's calendar, and nobody should have to click
+  // through fechas one by one to find what's actually playing today.
+  const today = allMatches
+    .filter((m) => m.isToday && m.status !== "FINISHED" && !m.postponed)
+    .sort((a, b) => a.kickoff.getTime() - b.kickoff.getTime());
   const later = upcoming.filter((m) => !m.isToday);
 
   const nextMatch = allMatches.find((m) => m.isNext);
@@ -65,7 +71,14 @@ export default async function PartidosPage({
           <>
             <SectionLabel>Hoy</SectionLabel>
             {today.map((m) => (
-              <MatchCard key={m.id} clubId={clubId} match={m} isAdmin={isAdmin} favoriteTeamName={favoriteTeamName} />
+              <MatchCard
+                key={m.id}
+                clubId={clubId}
+                match={m}
+                isAdmin={isAdmin}
+                favoriteTeamName={favoriteTeamName}
+                showJornada={m.jornadaNumber !== currentJornada}
+              />
             ))}
           </>
         )}
