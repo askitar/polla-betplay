@@ -17,7 +17,7 @@ export function JornadaSwitcher({
   return (
     <div className="mb-5 flex items-center justify-center gap-4">
       <Link
-        href={prev ? `/clubs/${clubId}/partidos?fecha=${prev}` : "#"}
+        href={prev ? `/clubs/${clubId}/cronograma?fecha=${prev}` : "#"}
         className={`icon-btn ${!prev ? "pointer-events-none opacity-30" : ""}`}
         aria-disabled={!prev}
       >
@@ -27,7 +27,7 @@ export function JornadaSwitcher({
         FECHA <span className="text-gold">{current}</span>
       </div>
       <Link
-        href={next ? `/clubs/${clubId}/partidos?fecha=${next}` : "#"}
+        href={next ? `/clubs/${clubId}/cronograma?fecha=${next}` : "#"}
         className={`icon-btn ${!next ? "pointer-events-none opacity-30" : ""}`}
         aria-disabled={!next}
       >

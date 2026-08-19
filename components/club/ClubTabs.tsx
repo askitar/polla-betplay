@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calendar, Trophy, Shield, User } from "lucide-react";
+import { Calendar, CalendarDays, Trophy, Shield, User } from "lucide-react";
 
 export function ClubTabs({ clubId }: { clubId: string }) {
   const pathname = usePathname();
@@ -14,6 +14,13 @@ export function ClubTabs({ clubId }: { clubId: string }) {
       icon: Calendar,
       href: `/clubs/${clubId}/partidos`,
       active: pathname === `/clubs/${clubId}/partidos`,
+    },
+    {
+      id: "cronograma",
+      label: "Cronograma",
+      icon: CalendarDays,
+      href: `/clubs/${clubId}/cronograma`,
+      active: pathname === `/clubs/${clubId}/cronograma`,
     },
     {
       id: "clasificacion",
