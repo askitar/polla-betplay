@@ -226,27 +226,42 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
 
 /**
  * Once-a-day check (see the cron route's daily window guard) for matches
- * we've marked POSTPONED: one Highlightly call per postponed match (by
- * team id pair, no date filter, so it finds the fixture whenever Dimayor
- * sets its date), and un-freezes it the moment a real status/date is
- * known. Cheap since postponements are rare — normally 0-1 calls/day.
+ * that need re-resolving against Highlightly by team id pair (no date
+ * filter, so it finds the fixture regardless of what date Dimayor has it
+ * under right now): matches we've marked POSTPONED, and matches sitting in
+ * SCHEDULED with a kickoff more than 3 hours in the past that never went
+ * LIVE/FINISHED. That second case catches a real failure mode: a
+ * postponed match gets a real date from this same check, we resolve it to
+ * SCHEDULED — then Dimayor postpones it *again* (as happened repeatedly
+ * during the August 2026 earthquake disruption) before it's played. Once
+ * resolved once, a match drops out of the `status: POSTPONED` query
+ * forever, and its now-stale past kickoff falls outside both the regular
+ * live-match guard and syncHighlightlyToday's "today" date query — so
+ * nothing else would ever notice it needs another look, leaving
+ * predictions silently locked for a match that was never actually played.
  */
 export async function checkPostponedMatches() {
   const leagueId = process.env.HIGHLIGHTLY_LEAGUE_ID;
   if (!leagueId) throw new Error("Falta configurar HIGHLIGHTLY_LEAGUE_ID.");
 
-  const postponed = await prisma.match.findMany({
-    where: { status: "POSTPONED" },
+  const stale = await prisma.match.findMany({
+    where: {
+      OR: [
+        { status: "POSTPONED" },
+        { status: "SCHEDULED", kickoff: { lt: new Date(Date.now() - 3 * 60 * 60_000) } },
+      ],
+    },
     include: { homeTeam: true, awayTeam: true },
   });
 
   let checked = 0;
   let resolved = 0;
   let stillPostponed = 0;
+  let rePostponed = 0;
   let skippedManual = 0;
   let skippedUnmapped = 0;
 
-  for (const m of postponed) {
+  for (const m of stale) {
     if (m.resultSource === "MANUAL") {
       skippedManual++;
       continue;
@@ -271,8 +286,23 @@ export async function checkPostponedMatches() {
     const fixture = fixtures.find((f) => f.round?.startsWith("Clausura")) ?? fixtures[0];
     const status = fixture ? STATUS_MAP[fixture.state.description] : undefined;
 
-    if (!fixture || !status || status === "POSTPONED") {
+    if (!fixture || !status) {
       stillPostponed++;
+      continue;
+    }
+
+    if (status === "POSTPONED") {
+      if (m.status !== "POSTPONED") {
+        // Was resolved to a real date before; Dimayor postponed it again.
+        // Flip back instead of leaving it stuck on a stale past kickoff.
+        await prisma.match.update({
+          where: { id: m.id },
+          data: { status: "POSTPONED", lastSyncedAt: new Date() },
+        });
+        rePostponed++;
+      } else {
+        stillPostponed++;
+      }
       continue;
     }
 
@@ -298,5 +328,5 @@ export async function checkPostponedMatches() {
     resolved++;
   }
 
-  return { checked, resolved, stillPostponed, skippedManual, skippedUnmapped };
+  return { checked, resolved, stillPostponed, rePostponed, skippedManual, skippedUnmapped };
 }
