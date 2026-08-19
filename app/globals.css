@@ -9,6 +9,10 @@
   --color-line-strong: #2c4636;
   --color-gold: #ffc72c;
   --color-gold-dim: #b98f17;
+  --color-silver: #d5dde2;
+  --color-silver-dim: #8b97a0;
+  --color-bronze: #d99356;
+  --color-bronze-dim: #9c6435;
   --color-flag-red: #ce1126;
   --color-flag-blue: #0b3d91;
   --color-acierto: #2fae66;
@@ -49,6 +53,7 @@ body {
   background: var(--color-card);
   border: 1px solid var(--color-line);
   border-radius: 0.75rem;
+  transition: box-shadow 250ms ease, border-color 250ms ease, transform 250ms ease;
 }
 .ticket-card::before,
 .ticket-card::after {
@@ -100,6 +105,21 @@ body {
 }
 
 @layer components {
+  /* Layered (not the base .ticket-card rule above) so a card-specific
+     override like the "next match" gold highlight — a utility-layer
+     shadow-[...] class — still wins over this default. */
+  .ticket-card {
+    box-shadow: 0 6px 20px -4px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+  .ticket-card:hover {
+    border-color: var(--color-gold-dim);
+    box-shadow:
+      0 10px 32px -6px rgba(0, 0, 0, 0.5),
+      0 0 40px -8px rgba(255, 199, 44, 0.22),
+      0 1px 3px rgba(0, 0, 0, 0.3);
+    transform: translateY(-2px);
+  }
+
   .eyebrow {
     font-family: var(--font-condensed);
     font-size: 0.75rem;
@@ -112,6 +132,18 @@ body {
     border: 1px solid var(--color-line);
     border-radius: 0.625rem;
     padding: 1rem;
+    box-shadow: 0 6px 20px -6px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.25);
+  }
+
+  /* Soft, blurred gold glow for interactive elements that aren't already
+     using .card/.ticket-card/.btn-* (e.g. leaderboard rows) — approaching
+     the element with the cursor should feel like it's catching light. */
+  .hover-glow {
+    transition: background-color 200ms ease, box-shadow 200ms ease;
+  }
+  .hover-glow:hover {
+    background-color: var(--color-card-hover);
+    box-shadow: 0 0 24px -4px rgba(255, 199, 44, 0.18);
   }
 
   .input-field {
@@ -152,10 +184,11 @@ body {
     font-size: 0.9375rem;
     font-weight: 700;
     letter-spacing: 0.02em;
-    transition: background-color 150ms ease, transform 150ms ease;
+    transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
   }
   .btn-primary:hover:not(:disabled) {
     background: #ffd35c;
+    box-shadow: 0 0 22px -2px rgba(255, 199, 44, 0.45);
   }
   .btn-primary:active:not(:disabled) {
     transform: scale(0.98);
@@ -179,11 +212,12 @@ body {
     font-size: 0.875rem;
     font-weight: 600;
     letter-spacing: 0.02em;
-    transition: background-color 150ms ease, border-color 150ms ease;
+    transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
   }
   .btn-secondary:hover:not(:disabled) {
     background: var(--color-card-hover);
     border-color: var(--color-gold-dim);
+    box-shadow: 0 0 18px -4px rgba(255, 199, 44, 0.25);
   }
   .btn-secondary:disabled {
     opacity: 0.45;
@@ -200,10 +234,11 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 150ms ease, color 150ms ease;
+    transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
   }
   .icon-btn:hover {
     background: var(--color-card-hover);
     color: var(--color-ink);
+    box-shadow: 0 0 16px -4px rgba(255, 199, 44, 0.3);
   }
 }

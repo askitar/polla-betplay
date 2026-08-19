@@ -10,7 +10,7 @@ export function ClubTabs({ clubId }: { clubId: string }) {
   const tabs = [
     {
       id: "partidos",
-      label: "Partidos",
+      label: "Partidos hoy",
       icon: Calendar,
       href: `/clubs/${clubId}/partidos`,
       active: pathname === `/clubs/${clubId}/partidos`,

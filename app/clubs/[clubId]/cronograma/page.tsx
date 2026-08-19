@@ -9,22 +9,29 @@ import { MatchCard } from "@/components/match/MatchCard";
 import { JornadaSwitcher } from "@/components/match/JornadaSwitcher";
 import { PartidosSidebar } from "@/components/match/PartidosSidebar";
 import { LiveRefresher } from "@/components/live/LiveRefresher";
+import { ViewSwitcher, CRONOGRAMA_VIEWS, type CronogramaView } from "@/components/match/ViewSwitcher";
 
-// Full calendar, browsed one fecha at a time — the "Hoy" cross-fecha view
-// lives on /partidos instead. Every card still shows its own "FECHA N" so
-// there's never ambiguity about which fecha you're looking at.
+// Full calendar. "Por fecha" browses one fecha at a time, same as before;
+// the other views (Jugados/Por jugar/Aplazados/En vivo) cut across the
+// whole season by match status instead, for when what you want is "show me
+// every postponed match" rather than "show me fecha 7". The "Hoy"
+// cross-fecha view lives on /partidos. Every card still shows its own
+// "FECHA N" so there's never ambiguity about which fecha you're looking at.
 export default async function CronogramaPage({
   params,
   searchParams,
 }: {
   params: Promise<{ clubId: string }>;
-  searchParams: Promise<{ fecha?: string }>;
+  searchParams: Promise<{ fecha?: string; view?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/signin");
 
   const { clubId } = await params;
-  const { fecha } = await searchParams;
+  const { fecha, view: viewParam } = await searchParams;
+  const view: CronogramaView = CRONOGRAMA_VIEWS.some((v) => v.id === viewParam)
+    ? (viewParam as CronogramaView)
+    : "fecha";
 
   const [allMatches, membership, { entries: leaderboard, hasLiveMatch }, me] = await Promise.all([
     getClubMatchesView(clubId, session.user.id),
@@ -45,69 +52,113 @@ export default async function CronogramaPage({
 
   const matches = allMatches.filter((m) => m.jornadaNumber === currentJornada);
   const upcoming = matches.filter((m) => m.status !== "FINISHED" && !m.postponed);
-  const finished = matches
+  const finishedInFecha = matches
     .filter((m) => m.status === "FINISHED")
     .sort((a, b) => b.kickoff.getTime() - a.kickoff.getTime());
-  const postponed = matches.filter((m) => m.postponed);
+  const postponedInFecha = matches.filter((m) => m.postponed);
+
+  const allJugados = allMatches
+    .filter((m) => m.status === "FINISHED")
+    .sort((a, b) => b.kickoff.getTime() - a.kickoff.getTime());
+  const allNoJugados = allMatches
+    .filter((m) => m.status === "SCHEDULED")
+    .sort((a, b) => a.kickoff.getTime() - b.kickoff.getTime());
+  const allAplazados = allMatches
+    .filter((m) => m.postponed)
+    .sort((a, b) => a.jornadaNumber - b.jornadaNumber);
+  const allEnVivo = allMatches
+    .filter((m) => m.status === "LIVE")
+    .sort((a, b) => a.kickoff.getTime() - b.kickoff.getTime());
 
   const nextMatch = allMatches.find((m) => m.isNext);
   const topThree = leaderboard.slice(0, 3);
+
+  const cardProps = { clubId, isAdmin, favoriteTeamName, showJornada: true as const };
 
   return (
     <div className="lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
       <LiveRefresher active={hasLiveMatch} />
       <div>
-        <JornadaSwitcher clubId={clubId} jornadas={jornadas} current={currentJornada} />
+        <ViewSwitcher clubId={clubId} current={view} />
 
-        {upcoming.length > 0 && (
+        {view === "fecha" && (
+          <>
+            <JornadaSwitcher clubId={clubId} jornadas={jornadas} current={currentJornada} />
+
+            {upcoming.length > 0 && (
+              <>
+                <SectionLabel>Por jugar</SectionLabel>
+                {upcoming.map((m) => (
+                  <MatchCard key={m.id} match={m} {...cardProps} />
+                ))}
+              </>
+            )}
+
+            {finishedInFecha.length > 0 && (
+              <>
+                <SectionLabel className="mt-2">Finalizados</SectionLabel>
+                {finishedInFecha.map((m) => (
+                  <MatchCard key={m.id} match={m} {...cardProps} />
+                ))}
+              </>
+            )}
+
+            {postponedInFecha.length > 0 && (
+              <>
+                <SectionLabel className="mt-2">Aplazados</SectionLabel>
+                {postponedInFecha.map((m) => (
+                  <MatchCard key={m.id} match={m} {...cardProps} />
+                ))}
+              </>
+            )}
+
+            {matches.length === 0 && <EmptyNote>No hay partidos programados en esta fecha.</EmptyNote>}
+          </>
+        )}
+
+        {view === "jugados" && (
+          <>
+            <SectionLabel>Jugados</SectionLabel>
+            {allJugados.length > 0 ? (
+              allJugados.map((m) => <MatchCard key={m.id} match={m} {...cardProps} />)
+            ) : (
+              <EmptyNote>Todavía no se ha jugado ningún partido.</EmptyNote>
+            )}
+          </>
+        )}
+
+        {view === "no-jugados" && (
           <>
             <SectionLabel>Por jugar</SectionLabel>
-            {upcoming.map((m) => (
-              <MatchCard
-                key={m.id}
-                clubId={clubId}
-                match={m}
-                isAdmin={isAdmin}
-                favoriteTeamName={favoriteTeamName}
-                showJornada
-              />
-            ))}
+            {allNoJugados.length > 0 ? (
+              allNoJugados.map((m) => <MatchCard key={m.id} match={m} {...cardProps} />)
+            ) : (
+              <EmptyNote>No hay partidos programados por jugar.</EmptyNote>
+            )}
           </>
         )}
 
-        {finished.length > 0 && (
+        {view === "aplazados" && (
           <>
-            <SectionLabel className="mt-2">Finalizados</SectionLabel>
-            {finished.map((m) => (
-              <MatchCard
-                key={m.id}
-                clubId={clubId}
-                match={m}
-                isAdmin={isAdmin}
-                favoriteTeamName={favoriteTeamName}
-                showJornada
-              />
-            ))}
+            <SectionLabel>Aplazados</SectionLabel>
+            {allAplazados.length > 0 ? (
+              allAplazados.map((m) => <MatchCard key={m.id} match={m} {...cardProps} />)
+            ) : (
+              <EmptyNote>No hay partidos aplazados en este momento.</EmptyNote>
+            )}
           </>
         )}
 
-        {postponed.length > 0 && (
+        {view === "en-vivo" && (
           <>
-            <SectionLabel className="mt-2">Aplazados</SectionLabel>
-            {postponed.map((m) => (
-              <MatchCard
-                key={m.id}
-                clubId={clubId}
-                match={m}
-                isAdmin={isAdmin}
-                favoriteTeamName={favoriteTeamName}
-                showJornada
-              />
-            ))}
+            <SectionLabel>En vivo</SectionLabel>
+            {allEnVivo.length > 0 ? (
+              allEnVivo.map((m) => <MatchCard key={m.id} match={m} {...cardProps} />)
+            ) : (
+              <EmptyNote>No hay ningún partido en vivo en este momento.</EmptyNote>
+            )}
           </>
         )}
-
-        {matches.length === 0 && <EmptyNote>No hay partidos programados en esta fecha.</EmptyNote>}
       </div>
 
       <aside className="hidden lg:flex lg:flex-col lg:gap-6">

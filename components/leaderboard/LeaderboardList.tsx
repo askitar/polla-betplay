@@ -6,6 +6,24 @@ import { PlayerStatsPanel } from "@/components/leaderboard/PlayerStatsPanel";
 import type { LeaderboardEntry } from "@/lib/leaderboard-service";
 import type { PlayerStats } from "@/lib/player-stats-service";
 
+// The top 3 are the ones actually in title contention, so they get a medal
+// treatment beyond the plain rank digit: a colored ring around the number
+// and a soft gradient underline instead of the flat row divider.
+const MEDAL_STYLES = [
+  {
+    badge: "text-gold ring-1 ring-gold/60 shadow-[0_0_14px_rgba(255,199,44,0.4)]",
+    underline: "after:from-transparent after:via-gold after:to-transparent",
+  },
+  {
+    badge: "text-silver ring-1 ring-silver/60 shadow-[0_0_12px_rgba(213,221,226,0.3)]",
+    underline: "after:from-transparent after:via-silver after:to-transparent",
+  },
+  {
+    badge: "text-bronze ring-1 ring-bronze/60 shadow-[0_0_12px_rgba(217,147,86,0.3)]",
+    underline: "after:from-transparent after:via-bronze after:to-transparent",
+  },
+];
+
 export function LeaderboardList({
   leaderboard,
   statsByUser,
@@ -19,16 +37,26 @@ export function LeaderboardList({
     <>
       {leaderboard.map((entry, i) => {
         const isExpanded = expandedUserId === entry.userId;
+        const medal = MEDAL_STYLES[i];
         return (
-          <div key={entry.userId} className={i < leaderboard.length - 1 ? "border-b border-line" : ""}>
+          <div
+            key={entry.userId}
+            className={`relative ${
+              medal
+                ? `after:absolute after:inset-x-3 after:bottom-0 after:h-px after:bg-gradient-to-r ${medal.underline}`
+                : i < leaderboard.length - 1
+                  ? "border-b border-line"
+                  : ""
+            }`}
+          >
             <button
               type="button"
               onClick={() => setExpandedUserId(isExpanded ? null : entry.userId)}
-              className="flex w-full items-center gap-2.5 py-3 text-left"
+              className="hover-glow -mx-1 flex w-full items-center gap-2.5 rounded-lg px-1 py-3 text-left"
             >
               <div
-                className={`w-7 text-center font-display text-lg ${
-                  i === 0 ? "text-gold" : "text-ink-faint"
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-display text-lg ${
+                  medal ? medal.badge : "text-ink-faint"
                 }`}
               >
                 {i + 1}
