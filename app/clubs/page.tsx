@@ -35,7 +35,7 @@ export default async function ClubsPage() {
               <Link
                 key={m.clubId}
                 href={`/clubs/${m.clubId}`}
-                className="ticket-card flex items-center justify-between gap-3 p-4 transition-colors hover:bg-card-hover"
+                className="ticket-card flex items-center justify-between gap-3 p-4"
               >
                 <div>
                   <div className="font-semibold">{m.club.name}</div>

@@ -15,7 +15,7 @@ export function ClubHeader({
   const profileHref = `/clubs/${clubId}/perfil`;
 
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
+    <div className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-line bg-pitch/55 px-5 py-4 backdrop-blur-xl [-webkit-backdrop-filter:blur(24px)_saturate(160%)] backdrop-saturate-150">
       <div className="flex items-center gap-3">
         <Link href="/clubs" className="icon-btn" aria-label="Volver a mis clubes">
           <ArrowLeft size={16} />

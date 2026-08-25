@@ -47,17 +47,21 @@ export function ClubTabs({ clubId }: { clubId: string }) {
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 z-20 flex justify-around border-t border-line bg-pitch
-        lg:static lg:justify-start lg:gap-1 lg:border-b lg:border-t-0 lg:px-5"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      className="fixed inset-x-3.5 bottom-3.5 z-20 flex justify-around gap-1 rounded-[20px] border border-line-strong
+        bg-pitch/60 px-1.5 py-2 shadow-[0_14px_40px_rgba(0,0,0,0.5)] backdrop-blur-2xl backdrop-saturate-150
+        lg:static lg:inset-auto lg:justify-start lg:gap-1 lg:rounded-none lg:border-0 lg:border-b lg:border-line
+        lg:bg-transparent lg:px-5 lg:py-0 lg:shadow-none lg:backdrop-blur-none"
+      style={{ bottom: "calc(env(safe-area-inset-bottom) + 14px)" }}
     >
       {tabs.map((t) => (
         <Link
           key={t.id}
           href={t.href}
-          className={`flex flex-1 flex-col items-center gap-1 py-2.5 font-condensed text-[11px] font-semibold tracking-wide transition-colors
-            lg:flex-none lg:flex-row lg:gap-1.5 lg:border-b-2 lg:px-3.5 lg:py-3 lg:text-[15px] ${
-              t.active ? "text-gold lg:border-gold" : "text-ink-dim hover:text-ink lg:border-transparent"
+          className={`flex flex-1 flex-col items-center gap-1 rounded-2xl py-2 font-condensed text-[10.5px] font-semibold tracking-wide transition-colors
+            lg:flex-none lg:flex-row lg:gap-1.5 lg:rounded-none lg:border-b-2 lg:px-3.5 lg:py-3 lg:text-[15px] ${
+              t.active
+                ? "bg-gold/10 text-gold lg:border-gold lg:bg-transparent"
+                : "text-ink-dim hover:text-ink lg:border-transparent"
             }`}
         >
           <t.icon size={18} className="lg:hidden" />

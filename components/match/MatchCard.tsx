@@ -216,7 +216,7 @@ export function MatchCard({
           <button
             onClick={handleSave}
             disabled={!complete || pending || (!dirty && !justSaved)}
-            className={`${dirty ? "btn-primary" : "btn-secondary"} px-5 py-2 text-[13px] ${
+            className={`${dirty ? "btn-primary" : justSaved ? "btn-secondary btn-saved" : "btn-secondary"} px-5 py-2 text-[13px] ${
               !complete ? "opacity-45" : ""
             }`}
           >

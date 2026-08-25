@@ -30,7 +30,7 @@ export default async function ClubLayout({
         userImage={session.user.image}
       />
       <ClubTabs clubId={clubId} />
-      <div className="mx-auto w-full max-w-3xl flex-1 px-5 pt-6 pb-24 lg:max-w-5xl lg:pb-6">
+      <div className="mx-auto w-full max-w-3xl flex-1 px-5 pt-6 pb-28 lg:max-w-5xl lg:pb-6">
         {children}
       </div>
     </div>

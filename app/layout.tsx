@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Anton, Barlow, Barlow_Condensed } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
+import { SoundEffects } from "@/components/SoundEffects";
 import "./globals.css";
 
 const anton = Anton({
@@ -38,6 +39,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col font-sans">
         {children}
+        <SoundEffects />
         <Analytics />
       </body>
     </html>
