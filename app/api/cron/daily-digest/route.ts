@@ -11,13 +11,15 @@ const receiver =
     : null;
 
 async function isAuthorized(request: Request, body: string) {
+  // Shared secret first: lets an admin trigger a one-off send (e.g. a test
+  // digest) without a real QStash signature, same as the other admin routes.
+  if (request.headers.get("x-cron-secret") === process.env.CRON_SHARED_SECRET) return true;
   if (receiver) {
     const signature = request.headers.get("upstash-signature");
     if (!signature) return false;
     return receiver.verify({ signature, body, url: request.url }).catch(() => false);
   }
-  // Dev-only fallback while QStash isn't configured yet.
-  return request.headers.get("x-cron-secret") === process.env.CRON_SHARED_SECRET;
+  return false;
 }
 
 export async function POST(request: Request) {
