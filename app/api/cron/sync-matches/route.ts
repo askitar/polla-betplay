@@ -38,6 +38,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
   }
 
+  // Manual escape hatch to verify the alert email itself works, without
+  // waiting for (or faking) a real Highlightly failure.
+  if (body) {
+    try {
+      const { testAlert } = JSON.parse(body) as { testAlert?: boolean };
+      if (testAlert) {
+        const result = await notifySyncFailure(
+          new Error('Highlightly respondió 429: {"message":"You have breached your daily request limits."}'),
+        );
+        return NextResponse.json({ testAlert: result });
+      }
+    } catch {
+      // No body / not JSON: proceed as a normal sync tick.
+    }
+  }
+
   const now = new Date();
   const colombiaNow = new Date(now.getTime() + COLOMBIA_OFFSET_MS);
   const hour = colombiaNow.getUTCHours();
