@@ -205,3 +205,64 @@ ${clubLines.join("\n")}
 
 Entra: ${appUrl}/clubs/${primaryClubId}/partidos`;
 }
+
+export type SyncFailureParams = {
+  /** true = Highlightly's daily call quota ran out; false = some other error. */
+  isQuota: boolean;
+  errorMessage: string;
+  /** UTC clock time the quota resets, formatted for Colombia (e.g. "7:00 p. m."). */
+  resetsAtLabel: string;
+};
+
+export function syncFailureEmailHtml({ isQuota, errorMessage, resetsAtLabel }: SyncFailureParams) {
+  const title = isQuota ? "Se agotó el cupo diario de Highlightly" : "La sincronización automática falló";
+  const body = isQuota
+    ? `El cupo gratuito de llamadas a Highlightly (100 al día) se agotó por hoy. La actualización automática de marcadores, partidos en vivo y aplazamientos está pausada hasta que el cupo se renueve, alrededor de las <b>${escapeHtml(resetsAtLabel)}</b> hora Colombia. No necesitas hacer nada: en cuanto se renueve, todo vuelve a actualizarse solo. Si un partido está en juego ahora mismo y necesitas el marcador antes de eso, puedes ponerlo manualmente desde el panel de administración.`
+    : `La sincronización automática de partidos tuvo un error y no se pudo completar. Puede que algunos resultados o estados en vivo no se estén actualizando hasta que esto se resuelva.`;
+
+  return `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#0A1712;font-family:Arial,Helvetica,sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#0A1712;padding:32px 0;">
+      <tr>
+        <td align="center">
+          <table width="460" cellpadding="0" cellspacing="0" style="background:#12241B;border:1px solid #1C2F24;border-radius:12px;padding:32px;">
+            <tr>
+              <td style="text-align:center;padding-bottom:20px;">
+                <span style="font-size:24px;font-weight:900;color:#FFC72C;letter-spacing:1px;">LA POLLA</span>
+                <span style="font-size:12px;color:#8FA396;letter-spacing:2px;"> LIGA BETPLAY</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-bottom:16px;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(206,17,38,0.10);border:1px solid rgba(206,17,38,0.35);border-radius:10px;">
+                  <tr><td style="padding:14px 16px;color:#F3EFDD;font-size:14px;font-weight:700;">
+                    ${escapeHtml(title)}
+                  </td></tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="color:#F3EFDD;font-size:14.5px;line-height:1.6;padding-bottom:16px;">
+                ${body}
+              </td>
+            </tr>
+            <tr>
+              <td style="color:#5E7568;font-size:11.5px;font-family:monospace;padding-top:4px;border-top:1px solid #1C2F24;padding-top:14px;">
+                ${escapeHtml(errorMessage)}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+export function syncFailureEmailText({ isQuota, errorMessage, resetsAtLabel }: SyncFailureParams) {
+  const body = isQuota
+    ? `El cupo gratuito de llamadas a Highlightly (100 al día) se agotó por hoy. La actualización automática está pausada hasta que el cupo se renueve, alrededor de las ${resetsAtLabel} hora Colombia. No necesitas hacer nada, se reanuda solo.`
+    : `La sincronización automática de partidos tuvo un error y no se pudo completar.`;
+  return `${isQuota ? "Se agotó el cupo diario de Highlightly" : "La sincronización automática falló"}\n\n${body}\n\nDetalle: ${errorMessage}`;
+}

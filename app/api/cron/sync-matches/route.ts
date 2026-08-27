@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Receiver } from "@upstash/qstash";
 import { syncHighlightlyToday, checkPostponedMatches } from "@/lib/highlightly";
 import { COLOMBIA_OFFSET_MS } from "@/lib/match-time";
+import { notifySyncFailure } from "@/lib/alerts";
 
 const receiver =
   process.env.QSTASH_CURRENT_SIGNING_KEY && process.env.QSTASH_NEXT_SIGNING_KEY
@@ -78,8 +79,11 @@ export async function POST(request: Request) {
     const postponedCheck = isDailyPostponedCheckWindow ? await checkPostponedMatches() : { skipped: true };
     return NextResponse.json({ sync, postponedCheck });
   } catch (e) {
+    // Best-effort: a broken alert email should never mask the real sync
+    // error in the response, and it must never throw past this catch.
+    const alert = await notifySyncFailure(e).catch(() => null);
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Error desconocido." },
+      { error: e instanceof Error ? e.message : "Error desconocido.", alert },
       { status: 500 },
     );
   }
