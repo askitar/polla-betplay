@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { Receiver } from "@upstash/qstash";
-import { prisma } from "@/lib/prisma";
 import { syncHighlightlyToday, checkPostponedMatches } from "@/lib/highlightly";
 import { COLOMBIA_OFFSET_MS } from "@/lib/match-time";
 
@@ -22,6 +21,13 @@ async function isAuthorized(request: Request, body: string) {
   return request.headers.get("x-cron-secret") === process.env.CRON_SHARED_SECRET;
 }
 
+// Active window: 7am-11:59pm Colombia. Outside real-world Dimayor kickoff
+// hours nothing plausibly changes, so calls are skipped there for free —
+// this is just an outer guard, not the thing that decides "is a match
+// relevant" (see below for why that used to be the bug).
+const ACTIVE_START_HOUR = 7;
+const ACTIVE_END_HOUR = 23; // inclusive — the 11pm hour still gets ticks.
+
 export async function POST(request: Request) {
   const body = await request.text();
 
@@ -30,45 +36,43 @@ export async function POST(request: Request) {
   }
 
   const now = new Date();
-  // A match takes roughly 100-130 minutes kickoff to final whistle
-  // (90 + stoppage + halftime). Only call out to Highlightly (100
-  // requests/day on the free plan) while a match is plausibly in that
-  // window or already marked LIVE — everything else is a free no-op.
-  // NOTE: this is relative to each match's kickoff, not to "now" — a
-  // match that kicked off 45 minutes ago has kickoff = now - 45min, so
-  // the lookback bound must be the larger (130min) one and the
-  // lookahead bound the smaller (10min) one, or a match past its first
-  // 10 live minutes silently falls out of the window forever (it's
-  // then neither "LIVE" in our DB, since we never caught it, nor
-  // within a mis-shaped window) — this was previously backwards.
-  const windowStart = new Date(now.getTime() - 130 * 60_000);
-  const windowEnd = new Date(now.getTime() + 10 * 60_000);
-
-  const hasRelevantMatch = await prisma.match.count({
-    where: {
-      OR: [
-        { status: "LIVE" },
-        { status: "SCHEDULED", kickoff: { gte: windowStart, lte: windowEnd } },
-      ],
-    },
-  });
-
-  // Postponed matches have no kickoff to compare against "now", so they'd
-  // never trip the window guard above — checked separately, once a day
-  // (colombia 08:00, the first of the day's 10-min ticks), one Highlightly
-  // call per postponed match instead of on every tick. The window must be
-  // at least as wide as the poll interval or a tick could land just past
-  // 08:10 and miss the day's only hit entirely.
   const colombiaNow = new Date(now.getTime() + COLOMBIA_OFFSET_MS);
-  const isDailyPostponedCheckWindow =
-    colombiaNow.getUTCHours() === 8 && colombiaNow.getUTCMinutes() < 10;
+  const hour = colombiaNow.getUTCHours();
+  const minute = colombiaNow.getUTCMinutes();
 
-  if (hasRelevantMatch === 0 && !isDailyPostponedCheckWindow) {
-    return NextResponse.json({ skipped: true, reason: "No hay partidos en vivo ni cerca de su horario." });
+  if (hour < ACTIVE_START_HOUR || hour > ACTIVE_END_HOUR) {
+    return NextResponse.json({ skipped: true, reason: "Fuera del horario activo (7am-11pm Colombia)." });
+  }
+
+  // QStash still ticks this route every 10 minutes around the clock (no
+  // schedule change needed) — of those, only every 3rd tick (:00 and :30,
+  // give or take a few minutes of delivery jitter) actually spends a
+  // Highlightly call. Previously this route only called Highlightly when a
+  // match was ALREADY marked LIVE or SCHEDULED within a narrow window of
+  // "now" — but that guard trusted our own bookkeeping to already be
+  // right, which is exactly what breaks: a match with a wrong stored
+  // kickoff time, or one Dimayor postpones same-day hours before it was due
+  // to start, both fall outside that window and never get checked again
+  // until something else happens to fix them. Calling Highlightly
+  // unconditionally on a fixed cadence during the day removes that
+  // dependency — every live/suspended/interrupted/postponed/finished
+  // transition for TODAY's matches gets picked up within half an hour, no
+  // matter what our DB currently believes about them.
+  const isSyncTick = minute % 30 < 10;
+
+  // Long-postponed matches (no kickoff to compare against "now" at all,
+  // possibly weeks stale) are checked separately, once a day, on the first
+  // tick of the active window — one Highlightly call per stale match, so
+  // it stays off the every-30-min cadence to keep the daily call budget
+  // (100/day on the free plan) comfortable.
+  const isDailyPostponedCheckWindow = hour === ACTIVE_START_HOUR && minute < 10;
+
+  if (!isSyncTick && !isDailyPostponedCheckWindow) {
+    return NextResponse.json({ skipped: true, reason: "No es un tick de sincronización (cada ~30 min)." });
   }
 
   try {
-    const sync = hasRelevantMatch > 0 ? await syncHighlightlyToday(now) : { skipped: true };
+    const sync = isSyncTick ? await syncHighlightlyToday(now) : { skipped: true };
     const postponedCheck = isDailyPostponedCheckWindow ? await checkPostponedMatches() : { skipped: true };
     return NextResponse.json({ sync, postponedCheck });
   } catch (e) {
