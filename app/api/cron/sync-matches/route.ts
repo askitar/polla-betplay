@@ -12,13 +12,15 @@ const receiver =
     : null;
 
 async function isAuthorized(request: Request, body: string) {
+  // Shared secret first: lets an admin force a one-off sync check (e.g. to
+  // verify a fix immediately) without a real QStash signature.
+  if (request.headers.get("x-cron-secret") === process.env.CRON_SHARED_SECRET) return true;
   if (receiver) {
     const signature = request.headers.get("upstash-signature");
     if (!signature) return false;
     return receiver.verify({ signature, body, url: request.url }).catch(() => false);
   }
-  // Dev-only fallback while QStash isn't configured yet.
-  return request.headers.get("x-cron-secret") === process.env.CRON_SHARED_SECRET;
+  return false;
 }
 
 // Active window: 7am-11:59pm Colombia. Outside real-world Dimayor kickoff
