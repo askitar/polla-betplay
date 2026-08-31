@@ -209,16 +209,29 @@ Entra: ${appUrl}/clubs/${primaryClubId}/partidos`;
 export type SyncFailureParams = {
   /** true = Highlightly's daily call quota ran out; false = some other error. */
   isQuota: boolean;
+  /** true = the database itself is unreachable or over its plan limits. */
+  isDbDown?: boolean;
   errorMessage: string;
   /** UTC clock time the quota resets, formatted for Colombia (e.g. "7:00 p. m."). */
   resetsAtLabel: string;
 };
 
-export function syncFailureEmailHtml({ isQuota, errorMessage, resetsAtLabel }: SyncFailureParams) {
-  const title = isQuota ? "Se agotó el cupo diario de Highlightly" : "La sincronización automática falló";
-  const body = isQuota
-    ? `El cupo gratuito de llamadas a Highlightly (100 al día) se agotó por hoy. La actualización automática de marcadores, partidos en vivo y aplazamientos está pausada hasta que el cupo se renueve, alrededor de las <b>${escapeHtml(resetsAtLabel)}</b> hora Colombia. No necesitas hacer nada: en cuanto se renueve, todo vuelve a actualizarse solo. Si un partido está en juego ahora mismo y necesitas el marcador antes de eso, puedes ponerlo manualmente desde el panel de administración.`
-    : `La sincronización automática de partidos tuvo un error y no se pudo completar. Puede que algunos resultados o estados en vivo no se estén actualizando hasta que esto se resuelva.`;
+export function syncFailureEmailHtml({
+  isQuota,
+  isDbDown,
+  errorMessage,
+  resetsAtLabel,
+}: SyncFailureParams) {
+  const title = isDbDown
+    ? "La base de datos no responde"
+    : isQuota
+      ? "Se agotó el cupo diario de Highlightly"
+      : "La sincronización automática falló";
+  const body = isDbDown
+    ? `La base de datos no está respondiendo, casi siempre porque se agotó el cupo mensual de cómputo del plan gratuito. Mientras siga así <b>la página queda caída para todos</b>: nadie puede entrar, porque las sesiones también viven en la base de datos. Esto no se arregla solo hasta que el cupo se renueve al inicio del mes o se suba el plan en el panel de la base de datos.`
+    : isQuota
+      ? `El cupo gratuito de llamadas a Highlightly (100 al día) se agotó por hoy. La actualización automática de marcadores, partidos en vivo y aplazamientos está pausada hasta que el cupo se renueve, alrededor de las <b>${escapeHtml(resetsAtLabel)}</b> hora Colombia. No necesitas hacer nada: en cuanto se renueve, todo vuelve a actualizarse solo. Si un partido está en juego ahora mismo y necesitas el marcador antes de eso, puedes ponerlo manualmente desde el panel de administración.`
+      : `La sincronización automática de partidos tuvo un error y no se pudo completar. Puede que algunos resultados o estados en vivo no se estén actualizando hasta que esto se resuelva.`;
 
   return `<!doctype html>
 <html>
@@ -260,9 +273,21 @@ export function syncFailureEmailHtml({ isQuota, errorMessage, resetsAtLabel }: S
 </html>`;
 }
 
-export function syncFailureEmailText({ isQuota, errorMessage, resetsAtLabel }: SyncFailureParams) {
-  const body = isQuota
-    ? `El cupo gratuito de llamadas a Highlightly (100 al día) se agotó por hoy. La actualización automática está pausada hasta que el cupo se renueve, alrededor de las ${resetsAtLabel} hora Colombia. No necesitas hacer nada, se reanuda solo.`
-    : `La sincronización automática de partidos tuvo un error y no se pudo completar.`;
-  return `${isQuota ? "Se agotó el cupo diario de Highlightly" : "La sincronización automática falló"}\n\n${body}\n\nDetalle: ${errorMessage}`;
+export function syncFailureEmailText({
+  isQuota,
+  isDbDown,
+  errorMessage,
+  resetsAtLabel,
+}: SyncFailureParams) {
+  const title = isDbDown
+    ? "La base de datos no responde"
+    : isQuota
+      ? "Se agotó el cupo diario de Highlightly"
+      : "La sincronización automática falló";
+  const body = isDbDown
+    ? `La base de datos no responde, casi siempre porque se agotó el cupo mensual de cómputo del plan gratuito. Mientras siga así la página queda caída para todos y nadie puede entrar. Se arregla al renovarse el cupo el mes siguiente o subiendo el plan.`
+    : isQuota
+      ? `El cupo gratuito de llamadas a Highlightly (100 al día) se agotó por hoy. La actualización automática está pausada hasta que el cupo se renueve, alrededor de las ${resetsAtLabel} hora Colombia. No necesitas hacer nada, se reanuda solo.`
+      : `La sincronización automática de partidos tuvo un error y no se pudo completar.`;
+  return `${title}\n\n${body}\n\nDetalle: ${errorMessage}`;
 }

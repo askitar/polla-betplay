@@ -1,5 +1,5 @@
-import { prisma } from "@/lib/prisma";
 import { POINTS, computeClubMatchPoints } from "@/lib/scoring";
+import { getAllMatches, getClubMemberships, getClubPredictions } from "@/lib/club-data";
 
 export type LeaderboardEntry = {
   userId: string;
@@ -13,29 +13,27 @@ export type LeaderboardEntry = {
 export async function getClubLeaderboard(
   clubId: string,
 ): Promise<{ entries: LeaderboardEntry[]; hasLiveMatch: boolean }> {
-  const memberships = await prisma.membership.findMany({
-    where: { clubId },
-    include: { user: { select: { id: true, name: true, image: true } } },
-  });
-  const memberIds = memberships.map((m) => m.userId);
+  // Shared per-request with the matches/stats services (lib/club-data.ts),
+  // so rendering a page that shows both the table and the fixtures reads
+  // each of these once rather than twice.
+  const [memberships, allMatches, predictions] = await Promise.all([
+    getClubMemberships(clubId),
+    getAllMatches(),
+    getClubPredictions(clubId),
+  ]);
 
   // LIVE matches count toward the table too, using their current
   // (not-yet-final) score — provisional points that move as the match does,
   // for excitement, replaced by the real result once the match ends.
-  const scoredMatches = await prisma.match.findMany({
-    where: { status: { in: ["FINISHED", "LIVE"] } },
-  });
-  const finishedIds = scoredMatches.map((m) => m.id);
+  const scoredMatches = allMatches.filter(
+    (m) => m.status === "FINISHED" || m.status === "LIVE",
+  );
+  const scoredIds = new Set(scoredMatches.map((m) => m.id));
   const hasLiveMatch = scoredMatches.some((m) => m.status === "LIVE");
-
-  const predictions = finishedIds.length
-    ? await prisma.prediction.findMany({
-        where: { userId: { in: memberIds }, matchId: { in: finishedIds } },
-      })
-    : [];
 
   const predictionIndex = new Map<string, Map<string, { homeScore: number; awayScore: number }>>();
   for (const p of predictions) {
+    if (!scoredIds.has(p.matchId)) continue;
     if (!predictionIndex.has(p.userId)) predictionIndex.set(p.userId, new Map());
     predictionIndex.get(p.userId)!.set(p.matchId, { homeScore: p.homeScore, awayScore: p.awayScore });
   }

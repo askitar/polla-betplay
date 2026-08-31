@@ -1,6 +1,6 @@
-import { prisma } from "@/lib/prisma";
 import { isLocked, isStarted, isWithinWarningWindow, isSameColombiaDay } from "@/lib/match-time";
 import { computeClubMatchPoints } from "@/lib/scoring";
+import { getAllMatches, getClubMemberships, getClubPredictions } from "@/lib/club-data";
 
 export type MatchView = {
   id: string;
@@ -35,20 +35,20 @@ export type MatchView = {
 };
 
 export async function getClubMatchesView(clubId: string, userId: string, now: Date = new Date()) {
-  const [matches, memberships, myPredictions] = await Promise.all([
-    prisma.match.findMany({
-      include: { homeTeam: true, awayTeam: true, jornada: true },
-      orderBy: { kickoff: "asc" },
-    }),
-    prisma.membership.findMany({
-      where: { clubId },
-      include: { user: { select: { id: true, name: true } } },
-    }),
-    prisma.prediction.findMany({ where: { userId } }),
+  // All three are per-request cached and shared with the leaderboard/stats
+  // services, so a page that renders several of them still pays for each
+  // read only once (see lib/club-data.ts).
+  const [matches, memberships, clubPredictions] = await Promise.all([
+    getAllMatches(),
+    getClubMemberships(clubId),
+    getClubPredictions(clubId),
   ]);
 
-  const myPredictionMap = new Map(myPredictions.map((p) => [p.matchId, p]));
-  const memberIds = memberships.map((m) => m.userId);
+  // The club layout guarantees the viewer is a member of this club, so
+  // their own predictions are already inside the club-wide set.
+  const myPredictionMap = new Map(
+    clubPredictions.filter((p) => p.userId === userId).map((p) => [p.matchId, p]),
+  );
 
   // Postponed/cancelled matches have no real kickoff anymore (Dimayor hasn't
   // announced a make-up date yet), so they're excluded from "next match" and
@@ -64,14 +64,8 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
   // Existence-only (never scores) predictions for every club member, across
   // every match — used for the "X de Y ya predijeron" counter. This is safe
   // to compute regardless of kickoff time since it never exposes a guess.
-  const allPredictions = memberIds.length
-    ? await prisma.prediction.findMany({
-        where: { matchId: { in: matches.map((m) => m.id) }, userId: { in: memberIds } },
-        select: { matchId: true, userId: true },
-      })
-    : [];
   const existenceIndex = new Map<string, Set<string>>();
-  for (const p of allPredictions) {
+  for (const p of clubPredictions) {
     if (!existenceIndex.has(p.matchId)) existenceIndex.set(p.matchId, new Set());
     existenceIndex.get(p.matchId)!.add(p.userId);
   }
@@ -79,19 +73,20 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
   // Matches where we need to know OTHER members' actual scores: only once
   // locked (nobody can submit or change a prediction anymore, so seeing
   // others' picks can't influence anyone's own) — never before.
-  const lockedMatchIds = matches
-    .filter((m) => {
-      if (m.status === "POSTPONED" || m.status === "CANCELLED") return false;
-      return m.status === "FINISHED" || isLocked(m.kickoff, now);
-    })
-    .map((m) => m.id);
-  const lockedPredictions = lockedMatchIds.length
-    ? await prisma.prediction.findMany({
-        where: { matchId: { in: lockedMatchIds }, userId: { in: memberIds } },
+  const lockedMatchIds = new Set(
+    matches
+      .filter((m) => {
+        if (m.status === "POSTPONED" || m.status === "CANCELLED") return false;
+        return m.status === "FINISHED" || isLocked(m.kickoff, now);
       })
-    : [];
+      .map((m) => m.id),
+  );
+  // Filtered in memory from the club-wide set rather than re-queried: the
+  // "only reveal once locked" guarantee is unchanged, it's just enforced
+  // here instead of in the WHERE clause.
   const predictionIndex = new Map<string, Map<string, { homeScore: number; awayScore: number }>>();
-  for (const p of lockedPredictions) {
+  for (const p of clubPredictions) {
+    if (!lockedMatchIds.has(p.matchId)) continue;
     if (!predictionIndex.has(p.matchId)) predictionIndex.set(p.matchId, new Map());
     predictionIndex.get(p.matchId)!.set(p.userId, { homeScore: p.homeScore, awayScore: p.awayScore });
   }

@@ -34,7 +34,9 @@ const TEAM_ID_TO_NAME: Record<number, string> = {
 // Confirmed against real API responses, not just docs — "Half time" (with
 // a space) is what Highlightly actually sends, not "Halftime" as guessed
 // originally, which silently dropped every match sitting at the break.
-const STATUS_MAP: Record<string, "SCHEDULED" | "LIVE" | "FINISHED" | "POSTPONED" | "CANCELLED"> = {
+type MatchStatus = "SCHEDULED" | "LIVE" | "FINISHED" | "POSTPONED" | "CANCELLED";
+
+const STATUS_MAP: Record<string, MatchStatus> = {
   "Not started": "SCHEDULED",
   "First half": "LIVE",
   "Half time": "LIVE",
@@ -107,16 +109,23 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
 
   // Highlightly's `date` filter is a UTC calendar day, NOT a Colombia
   // civil day — any kickoff at 19:00 COT or later (e.g. the usual 8:15pm
-  // slot, or even 6:15pm on a day it runs late) lands on a UTC date that
-  // can differ from "now"'s once the match's live window straddles UTC
-  // midnight (00:00 UTC = 7pm COT) — a match still LIVE past that point
-  // sits under *yesterday's* UTC date while "now" has already rolled over
-  // to today, so querying only now's date silently loses it mid-match.
-  // Querying each currently-LIVE match's own kickoff date too (usually
-  // the same as now's, so normally just one call) covers that case.
-  const liveMatches = await prisma.match.findMany({ where: { status: "LIVE" } });
+  // slot) lands on a UTC date that can differ from "now"'s once the
+  // match's live window straddles UTC midnight (00:00 UTC = 7pm COT): a
+  // match still live past that point sits under *yesterday's* UTC date
+  // while "now" has already rolled over, so querying only now's date
+  // silently loses it mid-match.
+  //
+  // This used to be handled by reading our own LIVE matches out of the DB
+  // and adding their kickoff dates. That's gone on purpose: it cost a DB
+  // query on every single tick (which alone kept Neon's compute awake
+  // around the clock and burned the monthly quota), and it trusted our own
+  // bookkeeping to already be right — the exact assumption that kept
+  // breaking. Adding yesterday's date whenever "now" is in the early UTC
+  // hours covers the same window with no DB access and no such trust.
   const dates = new Set([now.toISOString().slice(0, 10)]);
-  for (const m of liveMatches) dates.add(m.kickoff.toISOString().slice(0, 10));
+  if (now.getUTCHours() < 4) {
+    dates.add(new Date(now.getTime() - 24 * 60 * 60_000).toISOString().slice(0, 10));
+  }
 
   const fixtures: HighlightlyMatch[] = [];
   const seenFixtureIds = new Set<number>();
@@ -129,12 +138,19 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
     }
   }
 
-  let updated = 0;
-  let skippedManual = 0;
-  let skippedNoMatch = 0;
   let skippedUnmapped = 0;
   let skippedUnknownStatus = 0;
   let skippedWrongStage = 0;
+
+  // Resolve everything we can without touching the database first, so a day
+  // with no Liga BetPlay fixtures (most days) costs zero DB queries and
+  // lets Neon's compute stay suspended.
+  const actionable: Array<{
+    fixture: HighlightlyMatch;
+    homeName: string;
+    awayName: string;
+    status: MatchStatus;
+  }> = [];
 
   for (const f of fixtures) {
     // Highlightly has occasionally returned a stale Apertura (2026-I)
@@ -162,23 +178,56 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
       continue;
     }
 
-    const [homeTeam, awayTeam] = await Promise.all([
-      prisma.team.findUnique({ where: { name: homeName } }),
-      prisma.team.findUnique({ where: { name: awayName } }),
-    ]);
-    if (!homeTeam || !awayTeam) {
+    actionable.push({ fixture: f, homeName, awayName, status });
+  }
+
+  if (actionable.length === 0) {
+    return {
+      total: fixtures.length,
+      updated: 0,
+      skippedManual: 0,
+      skippedNoMatch: 0,
+      skippedUnmapped,
+      skippedUnknownStatus,
+      skippedWrongStage,
+      touchedDb: false,
+    };
+  }
+
+  // Two queries total for the whole batch, instead of the 3-4 per fixture
+  // the per-fixture findUnique/findFirst lookups used to cost.
+  const names = new Set<string>();
+  for (const a of actionable) {
+    names.add(a.homeName);
+    names.add(a.awayName);
+  }
+  const teams = await prisma.team.findMany({ where: { name: { in: [...names] } } });
+  const teamIdByName = new Map(teams.map((t) => [t.name, t.id]));
+
+  const teamIds = teams.map((t) => t.id);
+  const candidates = await prisma.match.findMany({
+    where: { homeTeamId: { in: teamIds }, awayTeamId: { in: teamIds } },
+  });
+  const matchByPair = new Map(candidates.map((m) => [`${m.homeTeamId}|${m.awayTeamId}`, m]));
+
+  let updated = 0;
+  let skippedManual = 0;
+  let skippedNoMatch = 0;
+
+  for (const { fixture: f, homeName, awayName, status } of actionable) {
+    const homeTeamId = teamIdByName.get(homeName);
+    const awayTeamId = teamIdByName.get(awayName);
+    if (!homeTeamId || !awayTeamId) {
       skippedUnmapped++;
       continue;
     }
 
-    let existing = await prisma.match.findFirst({
-      where: { homeTeamId: homeTeam.id, awayTeamId: awayTeam.id },
-    });
+    // Same pair-matching as before: exact orientation first, then the
+    // swapped one, since our seeded home/away doesn't always match theirs.
+    let existing = matchByPair.get(`${homeTeamId}|${awayTeamId}`);
     let swapped = false;
     if (!existing) {
-      existing = await prisma.match.findFirst({
-        where: { homeTeamId: awayTeam.id, awayTeamId: homeTeam.id },
-      });
+      existing = matchByPair.get(`${awayTeamId}|${homeTeamId}`);
       swapped = true;
     }
     if (!existing) {
@@ -221,6 +270,7 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
     skippedUnmapped,
     skippedUnknownStatus,
     skippedWrongStage,
+    touchedDb: true,
   };
 }
 

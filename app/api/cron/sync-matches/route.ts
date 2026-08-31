@@ -46,6 +46,7 @@ export async function POST(request: Request) {
       if (testAlert) {
         const result = await notifySyncFailure(
           new Error('Highlightly respondió 429: {"message":"You have breached your daily request limits."}'),
+          { dailyWindow: true },
         );
         return NextResponse.json({ testAlert: result });
       }
@@ -97,7 +98,14 @@ export async function POST(request: Request) {
   } catch (e) {
     // Best-effort: a broken alert email should never mask the real sync
     // error in the response, and it must never throw past this catch.
-    const alert = await notifySyncFailure(e).catch(() => null);
+    //
+    // The daily window is also what makes a DATABASE outage reportable:
+    // checkPostponedMatches always issues a query, so if the database is
+    // down that throws here, and `dailyWindow` lets the alert go out
+    // without needing the (unreachable) database-backed throttle.
+    const alert = await notifySyncFailure(e, { dailyWindow: isDailyPostponedCheckWindow }).catch(
+      () => null,
+    );
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Error desconocido.", alert },
       { status: 500 },
