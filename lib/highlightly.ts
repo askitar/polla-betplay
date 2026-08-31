@@ -181,7 +181,21 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
     actionable.push({ fixture: f, homeName, awayName, status });
   }
 
-  if (actionable.length === 0) {
+  // On a match day the day's fixtures are returned from 00:00, but a fixture
+  // that is still "Not started" and hours away has nothing we could write —
+  // so the ticks from early morning until shortly before the first kickoff
+  // don't need to wake the database at all. Anything else IS worth a look:
+  // a postponement, a suspension, a live clock, a final score, or a fixture
+  // whose kickoff has already passed while it still reads as not started.
+  // Note this deliberately keys off Highlightly's own kickoff time, never
+  // our stored one, so a wrong kickoff on our side can't hide a fixture.
+  const LOOKAHEAD_MS = 2 * 60 * 60_000;
+  const needsDb = actionable.some(
+    ({ fixture, status }) =>
+      status !== "SCHEDULED" || new Date(fixture.date).getTime() - now.getTime() < LOOKAHEAD_MS,
+  );
+
+  if (actionable.length === 0 || !needsDb) {
     return {
       total: fixtures.length,
       updated: 0,
