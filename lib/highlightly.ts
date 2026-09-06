@@ -67,10 +67,6 @@ type HighlightlyMatch = {
   awayTeam: { id: number; name: string };
 };
 
-const NAME_TO_TEAM_ID: Record<string, number> = Object.fromEntries(
-  Object.entries(TEAM_ID_TO_NAME).map(([id, name]) => [name, Number(id)]),
-);
-
 async function fetchHighlightly(path: string, params: Record<string, string>) {
   const apiKey = process.env.HIGHLIGHTLY_API_KEY;
   if (!apiKey) throw new Error("Falta configurar HIGHLIGHTLY_API_KEY.");
@@ -288,109 +284,163 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
   };
 }
 
+
 /**
- * Once-a-day check (see the cron route's daily window guard) for matches
- * that need re-resolving against Highlightly by team id pair (no date
- * filter, so it finds the fixture regardless of what date Dimayor has it
- * under right now): matches we've marked POSTPONED, and matches sitting in
- * SCHEDULED with a kickoff more than 3 hours in the past that never went
- * LIVE/FINISHED. That second case catches a real failure mode: a
- * postponed match gets a real date from this same check, we resolve it to
- * SCHEDULED — then Dimayor postpones it *again* (as happened repeatedly
- * during the August 2026 earthquake disruption) before it's played. Once
- * resolved once, a match drops out of the `status: POSTPONED` query
- * forever, and its now-stale past kickoff falls outside both the regular
- * live-match guard and syncHighlightlyToday's "today" date query — so
- * nothing else would ever notice it needs another look, leaving
- * predictions silently locked for a match that was never actually played.
+ * Full-season reconciliation: pulls every Clausura fixture from Highlightly
+ * and makes our copy of the calendar match it — kickoff time, status and
+ * score — for the whole season at once.
+ *
+ * Why this exists: the per-day sync only ever looks at fixtures playing
+ * today, so any match whose *schedule* drifted (Dimayor moves a kickoff by
+ * a couple of hours, or to another day entirely, which happens constantly
+ * around postponements) silently kept our stale date forever. Nothing ever
+ * went back to check. That is how the calendar ended up with matches
+ * sitting on the wrong day, in the wrong order, and two matches frozen
+ * mid-live days after they had actually finished — the per-day sync had
+ * simply stopped looking at them.
+ *
+ * It is deliberately cheap: the season endpoint pages 100 fixtures at a
+ * time, so the whole 190-match season costs 2 API calls and 2 database
+ * reads regardless of how much has drifted. That is less than the old
+ * one-call-per-postponed-match check it replaces.
+ *
+ * MANUAL results are never touched, same guarantee as everywhere else.
  */
-export async function checkPostponedMatches() {
+export async function reconcileSeason(season = "2026") {
   const leagueId = process.env.HIGHLIGHTLY_LEAGUE_ID;
   if (!leagueId) throw new Error("Falta configurar HIGHLIGHTLY_LEAGUE_ID.");
 
-  const stale = await prisma.match.findMany({
-    where: {
-      OR: [
-        { status: "POSTPONED" },
-        { status: "SCHEDULED", kickoff: { lt: new Date(Date.now() - 3 * 60 * 60_000) } },
-      ],
-    },
-    include: { homeTeam: true, awayTeam: true },
-  });
+  const fixtures: HighlightlyMatch[] = [];
+  let offset = 0;
+  let totalCount: number | null = null;
+  // Hard page cap so a malformed pagination response can never spin here.
+  for (let page = 0; page < 20; page++) {
+    const data = await fetchHighlightly("matches", {
+      leagueId,
+      season,
+      offset: String(offset),
+      limit: "100",
+    });
+    const batch = (data.data ?? []) as HighlightlyMatch[];
+    fixtures.push(...batch);
+    totalCount = data.pagination?.totalCount ?? fixtures.length;
+    offset += 100;
+    if (batch.length === 0 || fixtures.length >= (totalCount ?? 0)) break;
+  }
+
+  const clausura = fixtures.filter((f) => f.round?.startsWith("Clausura"));
+
+  const teams = await prisma.team.findMany();
+  const teamIdByName = new Map(teams.map((t) => [t.name, t.id]));
+  const matches = await prisma.match.findMany({ include: { jornada: true } });
+  const byPair = new Map(matches.map((m) => [`${m.homeTeamId}|${m.awayTeamId}`, m]));
 
   let checked = 0;
-  let resolved = 0;
-  let stillPostponed = 0;
-  let rePostponed = 0;
+  let fixedKickoff = 0;
+  let fixedStatus = 0;
+  let fixedScore = 0;
   let skippedManual = 0;
   let skippedUnmapped = 0;
+  let skippedNoMatch = 0;
+  let jornadaMismatch = 0;
+  const changes: string[] = [];
 
-  for (const m of stale) {
-    if (m.resultSource === "MANUAL") {
-      skippedManual++;
+  for (const f of clausura) {
+    const homeName = TEAM_ID_TO_NAME[f.homeTeam.id];
+    const awayName = TEAM_ID_TO_NAME[f.awayTeam.id];
+    if (!homeName || !awayName) {
+      skippedUnmapped++;
       continue;
     }
-
-    const homeId = NAME_TO_TEAM_ID[m.homeTeam.name];
-    const awayId = NAME_TO_TEAM_ID[m.awayTeam.name];
-    if (!homeId || !awayId) {
+    const homeTeamId = teamIdByName.get(homeName);
+    const awayTeamId = teamIdByName.get(awayName);
+    if (!homeTeamId || !awayTeamId) {
       skippedUnmapped++;
       continue;
     }
 
-    const data = await fetchHighlightly("matches", {
-      leagueId,
-      homeTeamId: String(homeId),
-      awayTeamId: String(awayId),
-      season: "2026",
-    });
+    let existing = byPair.get(`${homeTeamId}|${awayTeamId}`);
+    let swapped = false;
+    if (!existing) {
+      existing = byPair.get(`${awayTeamId}|${homeTeamId}`);
+      swapped = true;
+    }
+    if (!existing) {
+      skippedNoMatch++;
+      continue;
+    }
+    if (existing.resultSource === "MANUAL") {
+      skippedManual++;
+      continue;
+    }
+
+    const status = STATUS_MAP[f.state.description];
+    if (!status) continue;
     checked++;
 
-    const fixtures = (data.data ?? []) as HighlightlyMatch[];
-    const fixture = fixtures.find((f) => f.round?.startsWith("Clausura")) ?? fixtures[0];
-    const status = fixture ? STATUS_MAP[fixture.state.description] : undefined;
+    // Which fecha Dimayor has it under. Only reported, never rewritten:
+    // moving a match between fechas changes which round players were
+    // scored on, so that is a decision to make deliberately, not a silent
+    // background edit.
+    const roundNo = Number(f.round?.match(/(\d+)/)?.[1] ?? 0);
+    if (roundNo && existing.jornada.number !== roundNo) jornadaMismatch++;
 
-    if (!fixture || !status) {
-      stillPostponed++;
-      continue;
-    }
+    const apiKickoff = new Date(f.date);
+    const kickoffChanged = existing.kickoff.getTime() !== apiKickoff.getTime();
 
-    if (status === "POSTPONED") {
-      if (m.status !== "POSTPONED") {
-        // Was resolved to a real date before; Dimayor postponed it again.
-        // Flip back instead of leaving it stuck on a stale past kickoff.
-        await prisma.match.update({
-          where: { id: m.id },
-          data: { status: "POSTPONED", lastSyncedAt: new Date() },
-        });
-        rePostponed++;
-      } else {
-        stillPostponed++;
-      }
-      continue;
-    }
+    const [rawHome, rawAway] = parseScore(f.state.score.current);
+    const homeScore = swapped ? rawAway : rawHome;
+    const awayScore = swapped ? rawHome : rawAway;
+    const carriesScore = status === "LIVE" || status === "FINISHED";
+    const scoreChanged =
+      carriesScore && homeScore !== null && (existing.homeScore !== homeScore || existing.awayScore !== awayScore);
+    const statusChanged = existing.status !== status;
 
-    const [rawHome, rawAway] = parseScore(fixture.state.score.current);
+    if (!kickoffChanged && !statusChanged && !scoreChanged) continue;
 
     await prisma.match.update({
-      where: { id: m.id },
+      where: { id: existing.id },
       data: {
+        kickoff: apiKickoff,
         status,
-        kickoff: new Date(fixture.date),
         lastSyncedAt: new Date(),
-        ...(status === "LIVE" || status === "FINISHED"
+        ...(carriesScore && homeScore !== null
           ? {
-              homeScore: rawHome,
-              awayScore: rawAway,
+              homeScore,
+              awayScore,
               resultSource: "API" as const,
-              liveMinute: status === "LIVE" ? fixture.state.clock : null,
-              livePeriod: status === "LIVE" ? fixture.state.description : null,
+              liveMinute: status === "LIVE" ? f.state.clock : null,
+              livePeriod: status === "LIVE" ? f.state.description : null,
             }
-          : {}),
+          : { liveMinute: null, livePeriod: null }),
       },
     });
-    resolved++;
+
+    if (kickoffChanged) fixedKickoff++;
+    if (statusChanged) fixedStatus++;
+    if (scoreChanged) fixedScore++;
+    changes.push(
+      `${homeName} vs ${awayName}: ` +
+        [
+          kickoffChanged ? `hora ${existing.kickoff.toISOString()} -> ${f.date}` : null,
+          statusChanged ? `estado ${existing.status} -> ${status}` : null,
+          scoreChanged ? `marcador ${existing.homeScore}-${existing.awayScore} -> ${homeScore}-${awayScore}` : null,
+        ]
+          .filter(Boolean)
+          .join(", "),
+    );
   }
 
-  return { checked, resolved, stillPostponed, rePostponed, skippedManual, skippedUnmapped };
+  return {
+    fixturesSeen: clausura.length,
+    checked,
+    fixedKickoff,
+    fixedStatus,
+    fixedScore,
+    skippedManual,
+    skippedUnmapped,
+    skippedNoMatch,
+    jornadaMismatch,
+    changes,
+  };
 }

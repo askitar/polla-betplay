@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Receiver } from "@upstash/qstash";
-import { syncHighlightlyToday, checkPostponedMatches } from "@/lib/highlightly";
+import { syncHighlightlyToday, reconcileSeason } from "@/lib/highlightly";
 import { COLOMBIA_OFFSET_MS } from "@/lib/match-time";
 import { notifySyncFailure } from "@/lib/alerts";
 
@@ -42,7 +42,15 @@ export async function POST(request: Request) {
   // waiting for (or faking) a real Highlightly failure.
   if (body) {
     try {
-      const { testAlert } = JSON.parse(body) as { testAlert?: boolean };
+      const { testAlert, reconcile } = JSON.parse(body) as {
+        testAlert?: boolean;
+        reconcile?: boolean;
+      };
+      // Manual trigger for the full-season reconciliation, so the calendar
+      // can be re-squared on demand instead of waiting for tomorrow's run.
+      if (reconcile) {
+        return NextResponse.json({ reconcile: await reconcileSeason() });
+      }
       if (testAlert) {
         const result = await notifySyncFailure(
           new Error('Highlightly respondió 429: {"message":"You have breached your daily request limits."}'),
@@ -80,30 +88,36 @@ export async function POST(request: Request) {
   // matter what our DB currently believes about them.
   const isSyncTick = minute % 30 < 10;
 
-  // Long-postponed matches (no kickoff to compare against "now" at all,
-  // possibly weeks stale) are checked separately, once a day, on the first
-  // tick of the active window — one Highlightly call per stale match, so
-  // it stays off the every-30-min cadence to keep the daily call budget
-  // (100/day on the free plan) comfortable.
-  const isDailyPostponedCheckWindow = hour === ACTIVE_START_HOUR && minute < 10;
+  // Once a day, on the first tick of the active window, the WHOLE season is
+  // re-squared against Highlightly (see reconcileSeason): kickoff times,
+  // statuses and scores for all 190 fixtures, not just today's. The per-day
+  // sync above only ever looks at what is playing today, so a match whose
+  // schedule moved after we stored it was never revisited — which is how the
+  // calendar drifted into matches sitting on the wrong day, in the wrong
+  // order, and two matches frozen mid-live days after they had finished.
+  //
+  // It costs 2 API calls regardless of season size, so it stays off the
+  // every-30-min cadence and well inside the 100/day free quota. It also
+  // fully supersedes the old one-call-per-postponed-match check.
+  const isDailyReconcileWindow = hour === ACTIVE_START_HOUR && minute < 10;
 
-  if (!isSyncTick && !isDailyPostponedCheckWindow) {
+  if (!isSyncTick && !isDailyReconcileWindow) {
     return NextResponse.json({ skipped: true, reason: "No es un tick de sincronización (cada ~30 min)." });
   }
 
   try {
     const sync = isSyncTick ? await syncHighlightlyToday(now) : { skipped: true };
-    const postponedCheck = isDailyPostponedCheckWindow ? await checkPostponedMatches() : { skipped: true };
-    return NextResponse.json({ sync, postponedCheck });
+    const reconciliation = isDailyReconcileWindow ? await reconcileSeason() : { skipped: true };
+    return NextResponse.json({ sync, reconciliation });
   } catch (e) {
     // Best-effort: a broken alert email should never mask the real sync
     // error in the response, and it must never throw past this catch.
     //
     // The daily window is also what makes a DATABASE outage reportable:
-    // checkPostponedMatches always issues a query, so if the database is
-    // down that throws here, and `dailyWindow` lets the alert go out
-    // without needing the (unreachable) database-backed throttle.
-    const alert = await notifySyncFailure(e, { dailyWindow: isDailyPostponedCheckWindow }).catch(
+    // reconcileSeason always issues queries, so if the database is down
+    // that throws here, and `dailyWindow` lets the alert go out without
+    // needing the (unreachable) database-backed throttle.
+    const alert = await notifySyncFailure(e, { dailyWindow: isDailyReconcileWindow }).catch(
       () => null,
     );
     return NextResponse.json(
