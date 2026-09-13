@@ -73,20 +73,37 @@ export async function POST(request: Request) {
   }
 
   // QStash still ticks this route every 10 minutes around the clock (no
-  // schedule change needed) — of those, only every 3rd tick (:00 and :30,
-  // give or take a few minutes of delivery jitter) actually spends a
-  // Highlightly call. Previously this route only called Highlightly when a
-  // match was ALREADY marked LIVE or SCHEDULED within a narrow window of
-  // "now" — but that guard trusted our own bookkeeping to already be
+  // schedule change needed). Previously this route only called Highlightly
+  // when a match was ALREADY marked LIVE or SCHEDULED within a narrow window
+  // of "now" — but that guard trusted our own bookkeeping to already be
   // right, which is exactly what breaks: a match with a wrong stored
   // kickoff time, or one Dimayor postpones same-day hours before it was due
   // to start, both fall outside that window and never get checked again
   // until something else happens to fix them. Calling Highlightly
   // unconditionally on a fixed cadence during the day removes that
   // dependency — every live/suspended/interrupted/postponed/finished
-  // transition for TODAY's matches gets picked up within half an hour, no
+  // transition for TODAY's matches gets picked up on a fixed schedule, no
   // matter what our DB currently believes about them.
-  const isSyncTick = minute % 30 < 10;
+  //
+  // The cadence is tiered instead of a flat 30 min, because a flat 30 min
+  // is exactly what let a match that had actually finished sit reading LIVE
+  // for the better part of an hour: real kickoffs run roughly 1pm-9pm
+  // Colombia and stay live for up to ~2 hours after, so that whole stretch
+  // (13-23h) syncs every tick (~10 min) instead. Colombia 7-10pm (19-22h) is
+  // the one exception within that stretch: it's UTC 0-3, the same window
+  // syncHighlightlyToday also fetches *yesterday*'s date to cover a live
+  // match straddling UTC midnight, which doubles that tick's Highlightly
+  // calls — so it backs off to every ~20 min there to stay inside the
+  // 100/day free quota (worst case ≈80 calls/day with this split; a flat
+  // every-tick cadence all day would be ≈128, over budget). Outside match
+  // hours (7am-1pm) nothing plausible is happening, so that stays at the
+  // original ~30 min.
+  const isSyncTick =
+    hour >= 19 && hour <= 22
+      ? minute % 20 < 10
+      : hour >= 13 && hour <= ACTIVE_END_HOUR
+        ? true
+        : minute % 30 < 10;
 
   // Once a day, on the first tick of the active window, the WHOLE season is
   // re-squared against Highlightly (see reconcileSeason): kickoff times,
@@ -102,7 +119,7 @@ export async function POST(request: Request) {
   const isDailyReconcileWindow = hour === ACTIVE_START_HOUR && minute < 10;
 
   if (!isSyncTick && !isDailyReconcileWindow) {
-    return NextResponse.json({ skipped: true, reason: "No es un tick de sincronización (cada ~30 min)." });
+    return NextResponse.json({ skipped: true, reason: "No es un tick de sincronización." });
   }
 
   try {

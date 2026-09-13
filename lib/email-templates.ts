@@ -273,6 +273,79 @@ export function syncFailureEmailHtml({
 </html>`;
 }
 
+export type StuckMatchRow = {
+  matchId: string;
+  homeTeam: string;
+  awayTeam: string;
+  kickoffLabel: string;
+  hoursSinceKickoff: number;
+};
+
+export function stuckMatchEmailHtml(matches: StuckMatchRow[]) {
+  const rows = matches
+    .map(
+      (m) => `
+            <tr>
+              <td style="padding:10px 0;border-top:1px solid #1C2F24;color:#F3EFDD;font-size:14px;">
+                ${escapeHtml(m.homeTeam)} vs ${escapeHtml(m.awayTeam)}
+                <div style="color:#8FA396;font-size:12px;margin-top:2px;">
+                  Arrancó ${escapeHtml(m.kickoffLabel)} · lleva ${m.hoursSinceKickoff.toFixed(1)}h marcado como "en vivo"
+                </div>
+              </td>
+            </tr>`,
+    )
+    .join("");
+
+  return `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#0A1712;font-family:Arial,Helvetica,sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#0A1712;padding:32px 0;">
+      <tr>
+        <td align="center">
+          <table width="460" cellpadding="0" cellspacing="0" style="background:#12241B;border:1px solid #1C2F24;border-radius:12px;padding:32px;">
+            <tr>
+              <td style="text-align:center;padding-bottom:20px;">
+                <span style="font-size:24px;font-weight:900;color:#FFC72C;letter-spacing:1px;">LA POLLA</span>
+                <span style="font-size:12px;color:#8FA396;letter-spacing:2px;"> LIGA BETPLAY</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-bottom:16px;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,199,44,0.10);border:1px solid rgba(255,199,44,0.35);border-radius:10px;">
+                  <tr><td style="padding:14px 16px;color:#F3EFDD;font-size:14px;font-weight:700;">
+                    ${matches.length === 1 ? "Un partido quedó atascado \"en vivo\"" : `${matches.length} partidos quedaron atascados "en vivo"`}
+                  </td></tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="color:#F3EFDD;font-size:14.5px;line-height:1.6;padding-bottom:8px;">
+                Highlightly probablemente ya marca este partido como terminado, pero la sincronización no lo reflejó a tiempo. Ya debería haberse corregido solo en la siguiente vuelta; si sigue así, se puede corregir a mano desde el panel de administración.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  ${rows}
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+export function stuckMatchEmailText(matches: StuckMatchRow[]) {
+  const lines = matches.map(
+    (m) =>
+      `- ${m.homeTeam} vs ${m.awayTeam}: arrancó ${m.kickoffLabel}, lleva ${m.hoursSinceKickoff.toFixed(1)}h marcado como "en vivo"`,
+  );
+  return `${matches.length === 1 ? "Un partido quedó atascado \"en vivo\"" : `${matches.length} partidos quedaron atascados "en vivo"`}\n\nHighlightly probablemente ya lo marca como terminado, pero la sincronización no lo reflejó a tiempo. Debería corregirse solo en la siguiente vuelta; si sigue así, corrígelo a mano desde el panel de administración.\n\n${lines.join("\n")}`;
+}
+
 export function syncFailureEmailText({
   isQuota,
   isDbDown,

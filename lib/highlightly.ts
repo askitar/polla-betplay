@@ -1,6 +1,17 @@
 import { prisma } from "@/lib/prisma";
+import { notifyStuckMatches } from "@/lib/alerts";
 
 const API_BASE = "https://soccer.highlightly.net";
+
+// A real match, extra time and penalties included, is done well inside 2.5
+// hours of kickoff. 3 hours is a deliberately generous margin so this never
+// fires on a match that is simply still being played — anything past this
+// means the transition to FINISHED was missed, whatever the reason (a sync
+// gap, Highlightly itself not reporting it, or a matching bug), and today's
+// incident (a match still reading LIVE nearly an hour after it had actually
+// finished) showed that gap can otherwise go unnoticed until someone happens
+// to look at the page.
+const STUCK_LIVE_THRESHOLD_MS = 3 * 60 * 60_000;
 
 // Highlightly's team names/spellings don't match ours (different rebrand
 // timing, accents, shortenings) — matched by their numeric team id instead,
@@ -272,6 +283,32 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
     updated++;
   }
 
+  // Checked last, after this tick's own updates have already landed, so a
+  // match this very run just correctly flipped to FINISHED never triggers a
+  // false alarm — only a match that is STILL LIVE despite everything above
+  // counts as actually stuck.
+  const stale = await prisma.match.findMany({
+    where: { status: "LIVE", kickoff: { lt: new Date(now.getTime() - STUCK_LIVE_THRESHOLD_MS) } },
+    include: { homeTeam: true, awayTeam: true },
+  });
+  let stuckAlert: Awaited<ReturnType<typeof notifyStuckMatches>> | null = null;
+  if (stale.length > 0) {
+    stuckAlert = await notifyStuckMatches(
+      stale.map((m) => ({
+        matchId: m.id,
+        homeTeam: m.homeTeam.name,
+        awayTeam: m.awayTeam.name,
+        kickoffLabel: m.kickoff.toLocaleString("es-CO", {
+          timeZone: "America/Bogota",
+          weekday: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        hoursSinceKickoff: (now.getTime() - m.kickoff.getTime()) / 3_600_000,
+      })),
+    ).catch(() => null);
+  }
+
   return {
     total: fixtures.length,
     updated,
@@ -281,6 +318,8 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
     skippedUnknownStatus,
     skippedWrongStage,
     touchedDb: true,
+    stuckMatches: stale.length,
+    stuckAlert,
   };
 }
 

@@ -1,6 +1,12 @@
 import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
-import { syncFailureEmailHtml, syncFailureEmailText } from "@/lib/email-templates";
+import {
+  syncFailureEmailHtml,
+  syncFailureEmailText,
+  stuckMatchEmailHtml,
+  stuckMatchEmailText,
+  type StuckMatchRow,
+} from "@/lib/email-templates";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -15,6 +21,7 @@ const QUOTA_RESET_LABEL_COLOMBIA = "7:00 p. m.";
 const KIND_QUOTA = "highlightly_quota_exhausted";
 const KIND_DB = "database_unavailable";
 const KIND_OTHER = "sync_error";
+const KIND_STUCK_MATCH = "stuck_live_match";
 
 export function isQuotaExhaustedError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -120,4 +127,58 @@ export async function notifySyncFailure(error: unknown, opts: NotifyOptions = {}
   }
 
   return { sent: true, kind };
+}
+
+/**
+ * Emails Oscar when a match has sat in LIVE status for far longer than any
+ * real match plausibly takes (see STUCK_LIVE_THRESHOLD_MS in highlightly.ts).
+ * This is deliberately separate from notifySyncFailure: a stuck match is not
+ * a thrown error, it's a successful-looking sync that quietly stopped
+ * reflecting reality — the exact shape of today's incident, where the tick
+ * cadence left a finished match reading LIVE for a stretch of the evening.
+ * Once per day per match, same SystemAlert throttle as the other alerts, so
+ * a match still stuck tomorrow gets a fresh email rather than permanent
+ * silence, but a single stuck evening doesn't spam every tick.
+ */
+export async function notifyStuckMatches(matches: StuckMatchRow[]) {
+  if (matches.length === 0) return { skipped: true, reason: "Nada atascado." };
+
+  const startOfUtcDay = new Date();
+  startOfUtcDay.setUTCHours(0, 0, 0, 0);
+  const toAlert: StuckMatchRow[] = [];
+  for (const m of matches) {
+    const kind = `${KIND_STUCK_MATCH}:${m.matchId}`;
+    try {
+      const alreadySentToday = await prisma.systemAlert.findFirst({
+        where: { kind, sentAt: { gte: startOfUtcDay } },
+      });
+      if (!alreadySentToday) toAlert.push(m);
+    } catch {
+      // Throttle store unreachable: skip rather than risk a duplicate email
+      // per tick — this path only runs when the DB is already reachable
+      // (it's called right after a successful DB read), so this is
+      // defensive, not the expected case.
+      return { skipped: true, reason: "No se pudo consultar el control de avisos." };
+    }
+  }
+  if (toAlert.length === 0) return { skipped: true, reason: "Ya se avisó hoy." };
+
+  await resend.emails.send({
+    from: process.env.EMAIL_FROM!,
+    to: OPS_ALERT_EMAIL,
+    subject:
+      toAlert.length === 1
+        ? `Un partido quedó atascado "en vivo" — La Polla BetPlay`
+        : `${toAlert.length} partidos quedaron atascados "en vivo" — La Polla BetPlay`,
+    html: stuckMatchEmailHtml(toAlert),
+    text: stuckMatchEmailText(toAlert),
+  });
+
+  await Promise.all(
+    toAlert.map((m) =>
+      prisma.systemAlert.create({ data: { kind: `${KIND_STUCK_MATCH}:${m.matchId}` } }).catch(() => null),
+    ),
+  );
+
+  return { sent: true, count: toAlert.length };
 }
