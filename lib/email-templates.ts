@@ -364,3 +364,89 @@ export function syncFailureEmailText({
       : `La sincronización automática de partidos tuvo un error y no se pudo completar.`;
   return `${title}\n\n${body}\n\nDetalle: ${errorMessage}`;
 }
+
+export type ManualMismatchRow = {
+  matchId: string;
+  homeTeam: string;
+  awayTeam: string;
+  jornada: number;
+  ourHome: number | null;
+  ourAway: number | null;
+  realHome: number;
+  realAway: number;
+};
+
+/**
+ * A match whose score was set by hand disagrees with the official result.
+ * Deliberately never auto-corrected: a MANUAL score is an admin decision,
+ * and overriding it would undo the very corrections it exists for. But it
+ * does need saying out loud, because a manual score is invisible to the
+ * daily reconciliation, so a wrong one otherwise stays wrong forever and
+ * quietly skews everyone's points.
+ */
+export function manualMismatchEmailHtml(rows: ManualMismatchRow[]) {
+  const items = rows
+    .map(
+      (m) => `
+            <tr>
+              <td style="padding:10px 0;border-top:1px solid #1C2F24;color:#F3EFDD;font-size:14px;">
+                Fecha ${m.jornada} &middot; ${escapeHtml(m.homeTeam)} vs ${escapeHtml(m.awayTeam)}
+                <div style="color:#8FA396;font-size:12px;margin-top:2px;">
+                  En la polla: <b style="color:#CE1126;">${m.ourHome ?? "-"}-${m.ourAway ?? "-"}</b>
+                  &nbsp;&middot;&nbsp; resultado oficial: <b style="color:#2FAE66;">${m.realHome}-${m.realAway}</b>
+                </div>
+              </td>
+            </tr>`,
+    )
+    .join("");
+
+  return `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#0A1712;font-family:Arial,Helvetica,sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#0A1712;padding:32px 0;">
+      <tr>
+        <td align="center">
+          <table width="460" cellpadding="0" cellspacing="0" style="background:#12241B;border:1px solid #1C2F24;border-radius:12px;padding:32px;">
+            <tr>
+              <td style="text-align:center;padding-bottom:20px;">
+                <span style="font-size:24px;font-weight:900;color:#FFC72C;letter-spacing:1px;">LA POLLA</span>
+                <span style="font-size:12px;color:#8FA396;letter-spacing:2px;"> LIGA BETPLAY</span>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-bottom:16px;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,199,44,0.10);border:1px solid rgba(255,199,44,0.35);border-radius:10px;">
+                  <tr><td style="padding:14px 16px;color:#F3EFDD;font-size:14px;font-weight:700;">
+                    ${rows.length === 1 ? "Un marcador puesto a mano no coincide con el resultado oficial" : `${rows.length} marcadores puestos a mano no coinciden con el resultado oficial`}
+                  </td></tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="color:#F3EFDD;font-size:14px;line-height:1.6;padding-bottom:8px;">
+                Estos partidos tienen el marcador puesto a mano, así que la
+                revisión automática no los toca nunca. Eso es a propósito, pero
+                significa que si uno quedó mal, los puntos de todos salen mal y
+                nadie se entera. Revísalos y corrígelos si aplica.
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <table width="100%" cellpadding="0" cellspacing="0">${items}</table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+export function manualMismatchEmailText(rows: ManualMismatchRow[]) {
+  const lines = rows.map(
+    (m) =>
+      `- Fecha ${m.jornada}, ${m.homeTeam} vs ${m.awayTeam}: en la polla ${m.ourHome ?? "-"}-${m.ourAway ?? "-"}, oficial ${m.realHome}-${m.realAway}`,
+  );
+  return `${rows.length === 1 ? "Un marcador puesto a mano no coincide con el resultado oficial" : `${rows.length} marcadores puestos a mano no coinciden con el resultado oficial`}\n\nEstos partidos tienen el marcador puesto a mano, así que la revisión automática no los toca nunca. Si uno quedó mal, los puntos de todos salen mal.\n\n${lines.join("\n")}`;
+}

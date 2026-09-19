@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { notifyStuckMatches } from "@/lib/alerts";
+import type { ManualMismatchRow } from "@/lib/email-templates";
+import { notifyStuckMatches, notifyManualMismatches } from "@/lib/alerts";
 
 const API_BASE = "https://soccer.highlightly.net";
 
@@ -383,6 +384,7 @@ export async function reconcileSeason(season = "2026") {
   let skippedNoMatch = 0;
   let jornadaMismatch = 0;
   const changes: string[] = [];
+  const manualMismatches: ManualMismatchRow[] = [];
 
   for (const f of clausura) {
     const homeName = TEAM_ID_TO_NAME[f.homeTeam.id];
@@ -408,13 +410,42 @@ export async function reconcileSeason(season = "2026") {
       skippedNoMatch++;
       continue;
     }
+    const status = STATUS_MAP[f.state.description];
+    if (!status) continue;
+
+    const [rawHomeScore, rawAwayScore] = parseScore(f.state.score.current);
+    const apiHomeScore = swapped ? rawAwayScore : rawHomeScore;
+    const apiAwayScore = swapped ? rawHomeScore : rawAwayScore;
+
+    // A MANUAL result is a deliberate correction by the admin, so it is
+    // still never overwritten. But it used to be skipped in *silence*, and
+    // that is exactly how a wrong manual score survived: the one thing that
+    // checks the whole season against reality was also the one thing
+    // structurally unable to see it. Fecha 13 sat at 1-2 for days when it
+    // had finished 2-3, and no amount of reconciling would ever have caught
+    // it. Now a disagreement is reported so somebody can decide, which is
+    // the part that actually needs a human.
     if (existing.resultSource === "MANUAL") {
       skippedManual++;
+      const disagrees =
+        status === "FINISHED" &&
+        apiHomeScore !== null &&
+        (existing.homeScore !== apiHomeScore || existing.awayScore !== apiAwayScore);
+      if (disagrees) {
+        manualMismatches.push({
+          matchId: existing.id,
+          homeTeam: homeName,
+          awayTeam: awayName,
+          jornada: existing.jornada.number,
+          ourHome: existing.homeScore,
+          ourAway: existing.awayScore,
+          realHome: apiHomeScore,
+          realAway: apiAwayScore!,
+        });
+      }
       continue;
     }
 
-    const status = STATUS_MAP[f.state.description];
-    if (!status) continue;
     checked++;
 
     // Which fecha Dimayor has it under. Only reported, never rewritten:
@@ -427,9 +458,8 @@ export async function reconcileSeason(season = "2026") {
     const apiKickoff = new Date(f.date);
     const kickoffChanged = existing.kickoff.getTime() !== apiKickoff.getTime();
 
-    const [rawHome, rawAway] = parseScore(f.state.score.current);
-    const homeScore = swapped ? rawAway : rawHome;
-    const awayScore = swapped ? rawHome : rawAway;
+    const homeScore = apiHomeScore;
+    const awayScore = apiAwayScore;
     const carriesScore = status === "LIVE" || status === "FINISHED";
     const scoreChanged =
       carriesScore && homeScore !== null && (existing.homeScore !== homeScore || existing.awayScore !== awayScore);
@@ -470,6 +500,11 @@ export async function reconcileSeason(season = "2026") {
     );
   }
 
+  // Never auto-corrected (see the MANUAL branch above), but never silent
+  // either: this is the only pass that looks at the whole season, so if it
+  // says nothing about a bad manual score, nothing ever will.
+  const manualMismatchAlert = await notifyManualMismatches(manualMismatches).catch(() => null);
+
   return {
     fixturesSeen: clausura.length,
     checked,
@@ -481,5 +516,7 @@ export async function reconcileSeason(season = "2026") {
     skippedNoMatch,
     jornadaMismatch,
     changes,
+    manualMismatches,
+    manualMismatchAlert,
   };
 }

@@ -5,7 +5,10 @@ import {
   syncFailureEmailText,
   stuckMatchEmailHtml,
   stuckMatchEmailText,
+  manualMismatchEmailHtml,
+  manualMismatchEmailText,
   type StuckMatchRow,
+  type ManualMismatchRow,
 } from "@/lib/email-templates";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -22,6 +25,7 @@ const KIND_QUOTA = "highlightly_quota_exhausted";
 const KIND_DB = "database_unavailable";
 const KIND_OTHER = "sync_error";
 const KIND_STUCK_MATCH = "stuck_live_match";
+const KIND_MANUAL_MISMATCH = "manual_score_mismatch";
 
 export function isQuotaExhaustedError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -177,6 +181,62 @@ export async function notifyStuckMatches(matches: StuckMatchRow[]) {
   await Promise.all(
     toAlert.map((m) =>
       prisma.systemAlert.create({ data: { kind: `${KIND_STUCK_MATCH}:${m.matchId}` } }).catch(() => null),
+    ),
+  );
+
+  return { sent: true, count: toAlert.length };
+}
+
+/**
+ * Emails Oscar when a hand-entered score disagrees with the official result.
+ *
+ * MANUAL results are never auto-corrected anywhere in this codebase, on
+ * purpose: they exist precisely to override the feed when it is wrong. The
+ * cost of that rule is that a manual score is invisible to the daily
+ * reconciliation, so a manual score that is ITSELF wrong can never be
+ * caught by anything. That is not hypothetical: Fecha 13 sat at 1-2 when it
+ * had actually finished 2-3, skewing everyone's points, and it surfaced
+ * only because Oscar happened to remember the match.
+ *
+ * So the freeze stays and the silence goes. Once per day per match, same
+ * SystemAlert throttle as the other alerts, so an uncorrected mismatch
+ * reminds again tomorrow instead of being mentioned once and forgotten.
+ */
+export async function notifyManualMismatches(rows: ManualMismatchRow[]) {
+  if (rows.length === 0) return { skipped: true, reason: "Sin diferencias." };
+
+  const startOfUtcDay = new Date();
+  startOfUtcDay.setUTCHours(0, 0, 0, 0);
+  const toAlert: ManualMismatchRow[] = [];
+  for (const m of rows) {
+    const kind = `${KIND_MANUAL_MISMATCH}:${m.matchId}`;
+    try {
+      const alreadySentToday = await prisma.systemAlert.findFirst({
+        where: { kind, sentAt: { gte: startOfUtcDay } },
+      });
+      if (!alreadySentToday) toAlert.push(m);
+    } catch {
+      return { skipped: true, reason: "No se pudo consultar el control de avisos." };
+    }
+  }
+  if (toAlert.length === 0) return { skipped: true, reason: "Ya se avisó hoy." };
+
+  await resend.emails.send({
+    from: process.env.EMAIL_FROM!,
+    to: OPS_ALERT_EMAIL,
+    subject:
+      toAlert.length === 1
+        ? "Un marcador manual no coincide con el resultado oficial — La Polla BetPlay"
+        : `${toAlert.length} marcadores manuales no coinciden con el resultado oficial — La Polla BetPlay`,
+    html: manualMismatchEmailHtml(toAlert),
+    text: manualMismatchEmailText(toAlert),
+  });
+
+  await Promise.all(
+    toAlert.map((m) =>
+      prisma.systemAlert
+        .create({ data: { kind: `${KIND_MANUAL_MISMATCH}:${m.matchId}` } })
+        .catch(() => null),
     ),
   );
 
