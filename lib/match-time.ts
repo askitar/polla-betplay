@@ -31,3 +31,19 @@ export function colombiaDateKey(d: Date): string {
 export function isSameColombiaDay(a: Date, b: Date): boolean {
   return colombiaDateKey(a) === colombiaDateKey(b);
 }
+
+// The earliest a match can have a real final score: 90 minutes of play plus
+// a 15-minute half-time is ~105 minutes after kickoff, so 100 is a slightly
+// lenient floor that never blocks a genuine post-whistle correction.
+//
+// This exists because results were being saved as final for matches that
+// had not been played: Fecha 13 and Fecha 17 games, one of them a month
+// away, sat as FINISHED with scores like 2-0 and 1-1, awarding real points
+// for games that never happened. A final result before this point is not a
+// judgment call, it is impossible, so it is refused outright rather than
+// left to anyone's care.
+export const MIN_FINAL_RESULT_MS = 100 * 60_000;
+
+export function canHaveFinalResult(kickoff: Date, now: Date = new Date()): boolean {
+  return now.getTime() >= kickoff.getTime() + MIN_FINAL_RESULT_MS;
+}

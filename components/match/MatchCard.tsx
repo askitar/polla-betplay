@@ -266,7 +266,12 @@ export function MatchCard({
         </div>
       )}
 
-      {isAdmin && !finished && <AdminResultForm clubId={clubId} matchId={match.id} />}
+      {/* Only once the match could actually be over. Showing it under the
+          prediction dials on every upcoming match is what let predictions
+          get typed into it by mistake and saved as official results. */}
+      {isAdmin && !finished && match.resultEntryOpen && (
+        <AdminResultForm clubId={clubId} matchId={match.id} />
+      )}
 
       {match.membersReveal && match.membersReveal.length > 0 && (
         <div className="mt-3 border-t border-dashed border-line-strong pt-3">

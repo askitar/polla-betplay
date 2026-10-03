@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { ManualMismatchRow } from "@/lib/email-templates";
 import { notifyStuckMatches, notifyManualMismatches } from "@/lib/alerts";
+import { canHaveFinalResult } from "@/lib/match-time";
 
 const API_BASE = "https://soccer.highlightly.net";
 
@@ -383,6 +384,7 @@ export async function reconcileSeason(season = "2026") {
   let skippedUnmapped = 0;
   let skippedNoMatch = 0;
   let jornadaMismatch = 0;
+  let revertedImpossible = 0;
   const changes: string[] = [];
   const manualMismatches: ManualMismatchRow[] = [];
 
@@ -426,6 +428,57 @@ export async function reconcileSeason(season = "2026") {
     // it. Now a disagreement is reported so somebody can decide, which is
     // the part that actually needs a human.
     if (existing.resultSource === "MANUAL") {
+      // The one MANUAL case that IS corrected automatically: a "final"
+      // result on a match that, by Dimayor's own kickoff time, cannot have
+      // finished yet. That is not an admin judgment to respect, it is
+      // impossible data — in practice a prediction typed into the admin
+      // result form — and it awards points for a game nobody has played.
+      // Leaving it for a human was exactly what let six of them pile up.
+      // Everything else MANUAL stays frozen and is only reported below.
+      const apiKickoff = new Date(f.date);
+      if (existing.status === "FINISHED" && !canHaveFinalResult(apiKickoff, new Date())) {
+        const carries = status === "LIVE" || status === "FINISHED";
+        await prisma.match.update({
+          where: { id: existing.id },
+          data: {
+            kickoff: apiKickoff,
+            status,
+            lastSyncedAt: new Date(),
+            ...(carries && apiHomeScore !== null
+              ? {
+                  homeScore: apiHomeScore,
+                  awayScore: apiAwayScore,
+                  resultSource: "API" as const,
+                  liveMinute: status === "LIVE" ? f.state.clock : null,
+                  livePeriod: status === "LIVE" ? f.state.description : null,
+                }
+              : {
+                  homeScore: null,
+                  awayScore: null,
+                  resultSource: null,
+                  liveMinute: null,
+                  livePeriod: null,
+                }),
+          },
+        });
+        revertedImpossible++;
+        changes.push(
+          `${homeName} vs ${awayName}: resultado manual imposible ${existing.homeScore}-${existing.awayScore} revertido (el partido aún no había terminado), ahora ${status}`,
+        );
+        manualMismatches.push({
+          matchId: existing.id,
+          homeTeam: homeName,
+          awayTeam: awayName,
+          jornada: existing.jornada.number,
+          ourHome: existing.homeScore,
+          ourAway: existing.awayScore,
+          realHome: carries ? apiHomeScore : null,
+          realAway: carries ? apiAwayScore : null,
+          reverted: true,
+        });
+        continue;
+      }
+
       skippedManual++;
       const disagrees =
         status === "FINISHED" &&
@@ -440,7 +493,8 @@ export async function reconcileSeason(season = "2026") {
           ourHome: existing.homeScore,
           ourAway: existing.awayScore,
           realHome: apiHomeScore,
-          realAway: apiAwayScore!,
+          realAway: apiAwayScore,
+          reverted: false,
         });
       }
       continue;
@@ -515,6 +569,7 @@ export async function reconcileSeason(season = "2026") {
     skippedUnmapped,
     skippedNoMatch,
     jornadaMismatch,
+    revertedImpossible,
     changes,
     manualMismatches,
     manualMismatchAlert,

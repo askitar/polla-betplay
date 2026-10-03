@@ -372,17 +372,61 @@ export type ManualMismatchRow = {
   jornada: number;
   ourHome: number | null;
   ourAway: number | null;
-  realHome: number;
-  realAway: number;
+  /** Null when the match has no official score yet (not played). */
+  realHome: number | null;
+  realAway: number | null;
+  /**
+   * true = the manual result was impossible (the match could not have
+   * finished yet) and the reconciliation already reverted it on its own.
+   * false = a genuine disagreement left frozen for a human to decide.
+   */
+  reverted: boolean;
 };
 
+function officialLabel(m: ManualMismatchRow) {
+  return m.realHome === null || m.realAway === null ? "aún no se juega" : `${m.realHome}-${m.realAway}`;
+}
+
+function manualHeadline(rows: ManualMismatchRow[]) {
+  if (rows.every((r) => r.reverted)) {
+    return rows.length === 1
+      ? "Se cargó un resultado final en un partido que no se había jugado"
+      : `Se cargaron ${rows.length} resultados finales en partidos que no se habían jugado`;
+  }
+  return rows.length === 1
+    ? "Un marcador puesto a mano no coincide con el resultado oficial"
+    : `${rows.length} marcadores puestos a mano no coinciden con el resultado oficial`;
+}
+
+function manualIntro(rows: ManualMismatchRow[]) {
+  const parts: string[] = [];
+  if (rows.some((r) => r.reverted)) {
+    parts.push(
+      "Alguien con permiso de admin cargó un resultado final antes de que el partido terminara. " +
+        "Casi siempre es una predicción escrita en el cuadro de resultado oficial por error. " +
+        "Ya lo revertí, pero su predicción real probablemente no quedó guardada: avísale para que la ponga mientras el partido siga abierto.",
+    );
+  }
+  if (rows.some((r) => !r.reverted)) {
+    parts.push(
+      "Los marcadores puestos a mano nunca los toca la revisión automática, a propósito. " +
+        "Si uno quedó mal, los puntos de todos salen mal, así que revísalos y corrígelos si aplica.",
+    );
+  }
+  return parts.join(" ");
+}
+
 /**
- * A match whose score was set by hand disagrees with the official result.
- * Deliberately never auto-corrected: a MANUAL score is an admin decision,
- * and overriding it would undo the very corrections it exists for. But it
- * does need saying out loud, because a manual score is invisible to the
- * daily reconciliation, so a wrong one otherwise stays wrong forever and
- * quietly skews everyone's points.
+ * Hand-entered scores that disagree with the official result. Two kinds:
+ *
+ * - Impossible ones (a "final" result before the match could have ended)
+ *   are already reverted by the reconciliation; the email says so, because
+ *   the admin who did it most likely typed a prediction into the wrong box
+ *   and still needs to re-enter their real prediction.
+ * - Genuine disagreements stay frozen: a MANUAL score is an admin decision,
+ *   and overriding it would undo the very corrections it exists for. But it
+ *   is invisible to the daily reconciliation, so it has to be said out loud
+ *   or a wrong one stays wrong forever and quietly skews everyone's points.
  */
 export function manualMismatchEmailHtml(rows: ManualMismatchRow[]) {
   const items = rows
@@ -393,8 +437,9 @@ export function manualMismatchEmailHtml(rows: ManualMismatchRow[]) {
                 Fecha ${m.jornada} &middot; ${escapeHtml(m.homeTeam)} vs ${escapeHtml(m.awayTeam)}
                 <div style="color:#8FA396;font-size:12px;margin-top:2px;">
                   En la polla: <b style="color:#CE1126;">${m.ourHome ?? "-"}-${m.ourAway ?? "-"}</b>
-                  &nbsp;&middot;&nbsp; resultado oficial: <b style="color:#2FAE66;">${m.realHome}-${m.realAway}</b>
+                  &nbsp;&middot;&nbsp; oficial: <b style="color:#2FAE66;">${officialLabel(m)}</b>
                 </div>
+                ${m.reverted ? '<div style="color:#FFC72C;font-size:12px;margin-top:3px;">Ya lo corregí automáticamente: el partido aún no había terminado.</div>' : ""}
               </td>
             </tr>`,
     )
@@ -417,17 +462,14 @@ export function manualMismatchEmailHtml(rows: ManualMismatchRow[]) {
               <td style="padding-bottom:16px;">
                 <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,199,44,0.10);border:1px solid rgba(255,199,44,0.35);border-radius:10px;">
                   <tr><td style="padding:14px 16px;color:#F3EFDD;font-size:14px;font-weight:700;">
-                    ${rows.length === 1 ? "Un marcador puesto a mano no coincide con el resultado oficial" : `${rows.length} marcadores puestos a mano no coinciden con el resultado oficial`}
+                    ${escapeHtml(manualHeadline(rows))}
                   </td></tr>
                 </table>
               </td>
             </tr>
             <tr>
               <td style="color:#F3EFDD;font-size:14px;line-height:1.6;padding-bottom:8px;">
-                Estos partidos tienen el marcador puesto a mano, así que la
-                revisión automática no los toca nunca. Eso es a propósito, pero
-                significa que si uno quedó mal, los puntos de todos salen mal y
-                nadie se entera. Revísalos y corrígelos si aplica.
+                ${escapeHtml(manualIntro(rows))}
               </td>
             </tr>
             <tr>
@@ -446,7 +488,7 @@ export function manualMismatchEmailHtml(rows: ManualMismatchRow[]) {
 export function manualMismatchEmailText(rows: ManualMismatchRow[]) {
   const lines = rows.map(
     (m) =>
-      `- Fecha ${m.jornada}, ${m.homeTeam} vs ${m.awayTeam}: en la polla ${m.ourHome ?? "-"}-${m.ourAway ?? "-"}, oficial ${m.realHome}-${m.realAway}`,
+      `- Fecha ${m.jornada}, ${m.homeTeam} vs ${m.awayTeam}: en la polla ${m.ourHome ?? "-"}-${m.ourAway ?? "-"}, oficial ${officialLabel(m)}${m.reverted ? " (ya corregido automáticamente)" : ""}`,
   );
-  return `${rows.length === 1 ? "Un marcador puesto a mano no coincide con el resultado oficial" : `${rows.length} marcadores puestos a mano no coinciden con el resultado oficial`}\n\nEstos partidos tienen el marcador puesto a mano, así que la revisión automática no los toca nunca. Si uno quedó mal, los puntos de todos salen mal.\n\n${lines.join("\n")}`;
+  return `${manualHeadline(rows)}\n\n${manualIntro(rows)}\n\n${lines.join("\n")}`;
 }

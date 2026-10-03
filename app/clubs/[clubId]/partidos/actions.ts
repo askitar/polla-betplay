@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isLocked } from "@/lib/match-time";
+import { isLocked, canHaveFinalResult } from "@/lib/match-time";
 
 export async function savePrediction(
   clubId: string,
@@ -63,6 +63,23 @@ export async function submitManualResult(
     awayScore < 0
   ) {
     throw new Error("Marcador inválido.");
+  }
+
+  // Same fresh-read rule as savePrediction: never trust a flag computed
+  // earlier, check the stored kickoff against server time right now.
+  //
+  // Without this, an admin could save a "final" result for a match that had
+  // not started — and did, repeatedly: the form sits right under the
+  // prediction dials, so a prediction typed into the wrong box became the
+  // official result for everyone, matches a month away included, and
+  // awarded points for games that never happened.
+  const match = await prisma.match.findUnique({ where: { id: matchId } });
+  if (!match) throw new Error("Partido no encontrado.");
+  if (!canHaveFinalResult(match.kickoff, new Date())) {
+    throw new Error(
+      "Este partido todavía no ha terminado, así que no se le puede cargar un resultado final. " +
+        "Si querías poner tu predicción, usa los marcadores de arriba.",
+    );
   }
 
   // The match is shared across every club, so a correction here fixes it

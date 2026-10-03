@@ -1,4 +1,10 @@
-import { isLocked, isStarted, isWithinWarningWindow, isSameColombiaDay } from "@/lib/match-time";
+import {
+  isLocked,
+  isStarted,
+  isWithinWarningWindow,
+  isSameColombiaDay,
+  canHaveFinalResult,
+} from "@/lib/match-time";
 import { computeClubMatchPoints } from "@/lib/scoring";
 import { getAllMatches, getClubMemberships, getClubPredictions } from "@/lib/club-data";
 
@@ -20,6 +26,13 @@ export type MatchView = {
   livePeriod: string | null;
   isNext: boolean;
   isToday: boolean;
+  /**
+   * Whether an admin may enter an official final result yet. Computed here,
+   * on the server, so it uses server time rather than whatever clock the
+   * visitor's phone has, and so the form never even renders for a match that
+   * cannot have finished.
+   */
+  resultEntryOpen: boolean;
   myPrediction: { homeScore: number; awayScore: number } | null;
   myPoints: number | null;
   myPointsIsLive: boolean;
@@ -148,6 +161,7 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
       livePeriod: m.status === "LIVE" ? m.livePeriod : null,
       isNext: !postponed && nextKickoffMs != null && m.kickoff.getTime() === nextKickoffMs,
       isToday: !postponed && isSameColombiaDay(m.kickoff, now),
+      resultEntryOpen: !postponed && canHaveFinalResult(m.kickoff, now),
       myPrediction: mine,
       myPoints,
       myPointsIsLive: m.status === "LIVE",

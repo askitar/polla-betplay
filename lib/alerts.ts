@@ -225,9 +225,11 @@ export async function notifyManualMismatches(rows: ManualMismatchRow[]) {
     from: process.env.EMAIL_FROM!,
     to: OPS_ALERT_EMAIL,
     subject:
-      toAlert.length === 1
-        ? "Un marcador manual no coincide con el resultado oficial — La Polla BetPlay"
-        : `${toAlert.length} marcadores manuales no coinciden con el resultado oficial — La Polla BetPlay`,
+      toAlert.every((m) => m.reverted)
+        ? "Se cargaron resultados en partidos que no se habían jugado - La Polla BetPlay"
+        : toAlert.length === 1
+          ? "Un marcador manual no coincide con el resultado oficial - La Polla BetPlay"
+          : `${toAlert.length} marcadores manuales no coinciden con el resultado oficial - La Polla BetPlay`,
     html: manualMismatchEmailHtml(toAlert),
     text: manualMismatchEmailText(toAlert),
   });

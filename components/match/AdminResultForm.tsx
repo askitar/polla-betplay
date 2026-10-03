@@ -1,55 +1,102 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { ShieldAlert } from "lucide-react";
 import { submitManualResult } from "@/app/clubs/[clubId]/partidos/actions";
 
+/**
+ * Lets a club admin override the official final score when the automatic
+ * feed gets it wrong. It changes the result for EVERY player in every club,
+ * so it is built to be impossible to mistake for the prediction input that
+ * sits above it: separate red-tinted panel, explicit wording about what it
+ * does, and a second confirmation step before anything is saved. That
+ * mix-up is not hypothetical, it is how predictions ended up saved as
+ * official results for matches that had not been played.
+ */
 export function AdminResultForm({ clubId, matchId }: { clubId: string; matchId: string }) {
   const [home, setHome] = useState("");
   const [away, setAway] = useState("");
+  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  function handleSubmit() {
-    if (home === "" || away === "") return;
+  const complete = home !== "" && away !== "";
+
+  function handleConfirm() {
+    if (!complete) return;
     setError(null);
     startTransition(async () => {
       try {
         await submitManualResult(clubId, matchId, Number(home), Number(away));
+        setConfirming(false);
       } catch (e) {
         setError(e instanceof Error ? e.message : "No se pudo guardar.");
+        setConfirming(false);
       }
     });
   }
 
   return (
-    <div className="mt-3.5 border-t border-dashed border-line-strong pt-3.5">
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span className="shrink-0 text-[11px] text-ink-dim">ADMIN · cargar resultado:</span>
-        <input
-          type="number"
-          min={0}
-          placeholder="0"
-          value={home}
-          onChange={(e) => setHome(e.target.value)}
-          className="mini-input"
-        />
-        <span className="text-ink-faint">–</span>
-        <input
-          type="number"
-          min={0}
-          placeholder="0"
-          value={away}
-          onChange={(e) => setAway(e.target.value)}
-          className="mini-input"
-        />
-        <button
-          onClick={handleSubmit}
-          disabled={pending || home === "" || away === ""}
-          className="btn-secondary px-3 py-1.5 text-xs"
-        >
-          {pending ? "Guardando..." : "Guardar"}
-        </button>
+    <div className="mt-3.5 rounded-md border border-flag-red/40 bg-flag-red/10 p-3">
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-flag-red">
+        <ShieldAlert size={13} />
+        SOLO ADMIN · CORREGIR RESULTADO OFICIAL
       </div>
+      <p className="mb-2.5 text-[11px] leading-snug text-ink-dim">
+        Esto NO es tu predicción. Cambia el marcador final del partido para todos los
+        jugadores de todos los clubes. Úsalo solo si el resultado automático está mal.
+      </p>
+
+      {!confirming ? (
+        <div className="flex flex-wrap items-center gap-2.5">
+          <input
+            type="number"
+            min={0}
+            placeholder="0"
+            value={home}
+            onChange={(e) => setHome(e.target.value)}
+            className="mini-input"
+            aria-label="Goles local, resultado oficial"
+          />
+          <span className="text-ink-faint">-</span>
+          <input
+            type="number"
+            min={0}
+            placeholder="0"
+            value={away}
+            onChange={(e) => setAway(e.target.value)}
+            className="mini-input"
+            aria-label="Goles visitante, resultado oficial"
+          />
+          <button
+            onClick={() => setConfirming(true)}
+            disabled={!complete}
+            className="btn-secondary px-3 py-1.5 text-xs"
+          >
+            Corregir resultado
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="text-[12px] text-ink">
+            ¿Fijar el resultado oficial en <b>{home}-{away}</b> para todos?
+          </span>
+          <button
+            onClick={handleConfirm}
+            disabled={pending}
+            className="btn-primary px-3 py-1.5 text-xs"
+          >
+            {pending ? "Guardando..." : "Sí, fijar"}
+          </button>
+          <button
+            onClick={() => setConfirming(false)}
+            disabled={pending}
+            className="btn-secondary px-3 py-1.5 text-xs"
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
       {error && <p className="mt-1.5 text-xs text-flag-red">{error}</p>}
     </div>
   );
