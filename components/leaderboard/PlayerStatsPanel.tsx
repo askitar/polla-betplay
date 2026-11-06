@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { COLOMBIA_TIME_ZONE } from "@/lib/match-time";
 import { Target, CircleCheck, Circle, Star } from "lucide-react";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { POINTS } from "@/lib/scoring";
 import type { PlayerStats } from "@/lib/player-stats-service";
 
 function fmtDate(iso: Date | string) {
-  return new Date(iso).toLocaleDateString("es-CO", { day: "2-digit", month: "short" });
+  return new Date(iso).toLocaleDateString("es-CO", { timeZone: COLOMBIA_TIME_ZONE, day: "2-digit", month: "short" });
 }
 
 function SummaryRow({

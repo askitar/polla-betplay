@@ -27,7 +27,15 @@ export async function savePrediction(
   // request lifecycle, always check against the current kickoff + server time.
   const match = await prisma.match.findUnique({ where: { id: matchId } });
   if (!match) throw new Error("Partido no encontrado.");
-  if (match.status === "FINISHED" || isLocked(match.kickoff, new Date())) {
+  // A postponed match has no real kickoff: its stored date is stale and in the
+  // past, and predictions stay open on it (the card says so) until it gets a
+  // new one. A LIVE match is closed whatever its stored kickoff says.
+  const postponed = match.status === "POSTPONED" || match.status === "CANCELLED";
+  if (
+    match.status === "FINISHED" ||
+    match.status === "LIVE" ||
+    (!postponed && isLocked(match.kickoff, new Date()))
+  ) {
     throw new Error("Las predicciones para este partido ya cerraron.");
   }
 
@@ -75,6 +83,9 @@ export async function submitManualResult(
   // awarded points for games that never happened.
   const match = await prisma.match.findUnique({ where: { id: matchId } });
   if (!match) throw new Error("Partido no encontrado.");
+  if (match.status === "POSTPONED" || match.status === "CANCELLED") {
+    throw new Error("Este partido está aplazado, así que no se le puede cargar un resultado final.");
+  }
   if (!canHaveFinalResult(match.kickoff, new Date())) {
     throw new Error(
       "Este partido todavía no ha terminado, así que no se le puede cargar un resultado final. " +

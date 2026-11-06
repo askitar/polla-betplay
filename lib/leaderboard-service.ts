@@ -1,4 +1,5 @@
-import { POINTS, computeClubMatchPoints } from "@/lib/scoring";
+import { computeClubMatchBreakdown } from "@/lib/scoring";
+import { rankEntries } from "@/lib/ranking";
 import { getAllMatches, getClubMemberships, getClubPredictions } from "@/lib/club-data";
 
 export type LeaderboardEntry = {
@@ -8,6 +9,10 @@ export type LeaderboardEntry = {
   points: number;
   played: number;
   exact: number;
+  winners: number;
+  goals: number;
+  uniques: number;
+  rank: number;
 };
 
 export async function getClubLeaderboard(
@@ -38,8 +43,13 @@ export async function getClubLeaderboard(
     predictionIndex.get(p.userId)!.set(p.matchId, { homeScore: p.homeScore, awayScore: p.awayScore });
   }
 
-  const totals = new Map<string, { points: number; played: number; exact: number }>();
-  for (const mem of memberships) totals.set(mem.userId, { points: 0, played: 0, exact: 0 });
+  const totals = new Map<
+    string,
+    { points: number; played: number; exact: number; winners: number; goals: number; uniques: number }
+  >();
+  for (const mem of memberships) {
+    totals.set(mem.userId, { points: 0, played: 0, exact: 0, winners: 0, goals: 0, uniques: 0 });
+  }
 
   for (const match of scoredMatches) {
     if (match.homeScore == null || match.awayScore == null) continue;
@@ -48,7 +58,7 @@ export async function getClubLeaderboard(
       userId: mem.userId,
       prediction: predictionIndex.get(mem.userId)?.get(match.id) ?? null,
     }));
-    const pointsByUser = computeClubMatchPoints(
+    const breakdownByUser = computeClubMatchBreakdown(
       { homeScore: match.homeScore, awayScore: match.awayScore },
       memberPredictions,
     );
@@ -59,13 +69,17 @@ export async function getClubLeaderboard(
 
       const entry = totals.get(mem.userId)!;
       entry.played++;
-      const score = pointsByUser.get(mem.userId) ?? 0;
-      entry.points += score;
-      if (score === POINTS.EXACT || score === POINTS.EXACT + POINTS.UNIQUE_BONUS) entry.exact++;
+      const b = breakdownByUser.get(mem.userId);
+      if (!b) continue;
+      entry.points += b.total;
+      if (b.exact) entry.exact++;
+      if (b.winner) entry.winners++;
+      if (b.goal) entry.goals++;
+      if (b.uniqueBonus) entry.uniques++;
     }
   }
 
-  const entries: LeaderboardEntry[] = memberships.map((mem) => {
+  const unranked = memberships.map((mem) => {
     const t = totals.get(mem.userId)!;
     return {
       userId: mem.userId,
@@ -74,9 +88,11 @@ export async function getClubLeaderboard(
       points: t.points,
       played: t.played,
       exact: t.exact,
+      winners: t.winners,
+      goals: t.goals,
+      uniques: t.uniques,
     };
   });
 
-  entries.sort((a, b) => b.points - a.points || b.exact - a.exact);
-  return { entries, hasLiveMatch };
+  return { entries: rankEntries(unranked), hasLiveMatch };
 }

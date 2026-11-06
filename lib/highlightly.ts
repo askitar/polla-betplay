@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import type { ManualMismatchRow } from "@/lib/email-templates";
 import { notifyStuckMatches, notifyManualMismatches } from "@/lib/alerts";
 import { canHaveFinalResult } from "@/lib/match-time";
+import { isRegularSeasonRound } from "@/lib/season";
 
 const API_BASE = "https://soccer.highlightly.net";
 
@@ -166,10 +167,10 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
     // fixture for a team pair under a Clausura-season date query — caught
     // live when Fortaleza vs Cúcuta got marked FINISHED with January's
     // Apertura score (1-1) days before the real Clausura match kicked off.
-    // We only ever track Clausura, so any fixture explicitly tagged as a
-    // different stage is skipped; fixtures with no round info still match
-    // as before.
-    if (f.round && !f.round.startsWith("Clausura")) {
+    // We only ever track the Clausura's regular season, so anything else is
+    // skipped: other stages, and the Clausura playoffs too (see
+    // isRegularSeasonRound for why a prefix check is not enough).
+    if (!isRegularSeasonRound(f.round)) {
       skippedWrongStage++;
       continue;
     }
@@ -270,6 +271,9 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
       where: { id: existing.id },
       data: {
         status,
+        // Same-day schedule changes: without this a match moved earlier stays
+        // open for predictions until the next morning's reconciliation.
+        kickoff: new Date(f.date),
         lastSyncedAt: new Date(),
         ...(status === "LIVE" || status === "FINISHED"
           ? {
@@ -369,7 +373,7 @@ export async function reconcileSeason(season = "2026") {
     if (batch.length === 0 || fixtures.length >= (totalCount ?? 0)) break;
   }
 
-  const clausura = fixtures.filter((f) => f.round?.startsWith("Clausura"));
+  const clausura = fixtures.filter((f) => isRegularSeasonRound(f.round));
 
   const teams = await prisma.team.findMany();
   const teamIdByName = new Map(teams.map((t) => [t.name, t.id]));

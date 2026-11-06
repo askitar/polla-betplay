@@ -8,16 +8,22 @@ import { savePrediction } from "@/app/clubs/[clubId]/partidos/actions";
 import { AdminResultForm } from "@/components/match/AdminResultForm";
 import { CountdownTimer } from "@/components/match/CountdownTimer";
 import { GoalCelebration } from "@/components/match/GoalCelebration";
+import { COLOMBIA_TIME_ZONE } from "@/lib/match-time";
 import type { MatchView } from "@/lib/matches-service";
 
 function fmtDate(iso: Date | string) {
   const d = new Date(iso);
   const datePart = d.toLocaleDateString("es-CO", {
+    timeZone: COLOMBIA_TIME_ZONE,
     weekday: "short",
     day: "2-digit",
     month: "short",
   });
-  const timePart = d.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+  const timePart = d.toLocaleTimeString("es-CO", {
+    timeZone: COLOMBIA_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   return `${datePart} · ${timePart}`;
 }
 

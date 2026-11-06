@@ -37,7 +37,7 @@ export function LeaderboardList({
     <>
       {leaderboard.map((entry, i) => {
         const isExpanded = expandedUserId === entry.userId;
-        const medal = MEDAL_STYLES[i];
+        const medal = MEDAL_STYLES[entry.rank - 1];
         return (
           <div
             key={entry.userId}
@@ -59,7 +59,7 @@ export function LeaderboardList({
                   medal ? medal.badge : "text-ink-faint"
                 }`}
               >
-                {i + 1}
+                {entry.rank}
               </div>
               <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-line-strong bg-card-hover">
                 {entry.userImage ? (
@@ -74,7 +74,7 @@ export function LeaderboardList({
               <div className="flex-1">
                 <div className="flex items-center gap-1.5 text-[15px] font-semibold">
                   {entry.userName}
-                  {i === 0 && entry.points > 0 && <Star size={13} className="fill-gold text-gold" />}
+                  {entry.rank === 1 && entry.points > 0 && <Star size={13} className="fill-gold text-gold" />}
                 </div>
                 <div className="text-xs text-ink-dim">
                   {entry.played} predicciones · {entry.exact} exactas

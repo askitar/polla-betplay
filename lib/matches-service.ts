@@ -90,7 +90,7 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
     matches
       .filter((m) => {
         if (m.status === "POSTPONED" || m.status === "CANCELLED") return false;
-        return m.status === "FINISHED" || isLocked(m.kickoff, now);
+        return m.status === "FINISHED" || m.status === "LIVE" || isLocked(m.kickoff, now);
       })
       .map((m) => m.id),
   );
@@ -107,7 +107,8 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
   const views: MatchView[] = matches.map((m) => {
     const postponed = m.status === "POSTPONED" || m.status === "CANCELLED";
     const started = !postponed && (m.status === "FINISHED" || isStarted(m.kickoff, now));
-    const locked = !postponed && (m.status === "FINISHED" || isLocked(m.kickoff, now));
+    const locked =
+      !postponed && (m.status === "FINISHED" || m.status === "LIVE" || isLocked(m.kickoff, now));
     const withinWarning = !postponed && !started && isWithinWarningWindow(m.kickoff, now);
     const mine = myPredictionMap.get(m.id) ?? null;
     const predictedIds = existenceIndex.get(m.id);

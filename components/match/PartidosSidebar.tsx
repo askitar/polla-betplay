@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Trophy } from "lucide-react";
 import { CountdownTimer } from "@/components/match/CountdownTimer";
+import { COLOMBIA_TIME_ZONE } from "@/lib/match-time";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import type { MatchView } from "@/lib/matches-service";
 import type { LeaderboardEntry } from "@/lib/leaderboard-service";
@@ -14,10 +15,10 @@ export function PartidosSidebar({
   nextMatch: MatchView | undefined;
   topThree: LeaderboardEntry[];
 }) {
-  if (!nextMatch) return null;
-
   return (
     <div className="sticky top-6">
+      {nextMatch && (
+        <>
       <SectionLabel>Próximo partido</SectionLabel>
       <div className="ticket-card relative border-gold p-4 shadow-[0_0_0_1px_rgba(255,199,44,0.25),0_4px_18px_rgba(255,199,44,0.08)]">
         {!nextMatch.started && (
@@ -27,12 +28,14 @@ export function PartidosSidebar({
         )}
         <div className="text-center text-xs text-ink-dim">
           {new Date(nextMatch.kickoff).toLocaleDateString("es-CO", {
+            timeZone: COLOMBIA_TIME_ZONE,
             weekday: "long",
             day: "2-digit",
             month: "short",
           })}{" "}
           ·{" "}
           {new Date(nextMatch.kickoff).toLocaleTimeString("es-CO", {
+            timeZone: COLOMBIA_TIME_ZONE,
             hour: "2-digit",
             minute: "2-digit",
           })}
@@ -44,7 +47,10 @@ export function PartidosSidebar({
         </div>
       </div>
 
-      <SectionLabel className="mt-7">Top del club</SectionLabel>
+        </>
+      )}
+
+      <SectionLabel className={nextMatch ? "mt-7" : ""}>Top del club</SectionLabel>
       <div className="card">
         {topThree.map((entry, i) => (
           <div
@@ -53,8 +59,8 @@ export function PartidosSidebar({
               i < topThree.length - 1 ? "border-b border-line" : ""
             }`}
           >
-            <span className={`font-display text-sm ${i === 0 ? "text-gold" : "text-ink-faint"}`}>
-              {i + 1}
+            <span className={`font-display text-sm ${entry.rank === 1 ? "text-gold" : "text-ink-faint"}`}>
+              {entry.rank}
             </span>
             <span className="flex-1 text-sm">{entry.userName}</span>
             <span className="font-display text-lg text-gold">{entry.points}</span>

@@ -36,7 +36,12 @@ function pickMotivational(rank: number, total: number): string {
 }
 
 function fmtKickoff(d: Date) {
-  const datePart = d.toLocaleDateString("es-CO", { weekday: "short", day: "2-digit", month: "short" });
+  const datePart = d.toLocaleDateString("es-CO", {
+    timeZone: "America/Bogota",
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+  });
   const timePart = d.toLocaleTimeString("es-CO", {
     hour: "2-digit",
     minute: "2-digit",
@@ -120,7 +125,7 @@ export async function buildDailyDigests(now: Date = new Date()): Promise<DigestF
     const clubs: DigestClubRow[] = memberRows.map((mem) => {
       const entries = leaderboards.get(mem.clubId) ?? [];
       const idx = entries.findIndex((e) => e.userId === userId);
-      const rank = idx === -1 ? entries.length || 1 : idx + 1;
+      const rank = idx === -1 ? entries.length || 1 : entries[idx].rank;
       const points = idx === -1 ? 0 : entries[idx].points;
       return {
         clubName: mem.club.name,

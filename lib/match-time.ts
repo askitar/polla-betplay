@@ -24,6 +24,10 @@ export function isWithinWarningWindow(kickoff: Date, now: Date = new Date()): bo
 // timezone (Vercel runs in UTC).
 export const COLOMBIA_OFFSET_MS = -5 * 60 * 60 * 1000;
 
+// Dates must always be formatted with this: server components render in UTC
+// on Vercel, so without it an 8:15 p. m. match reads as 01:15 a. m. the next day.
+export const COLOMBIA_TIME_ZONE = "America/Bogota";
+
 export function colombiaDateKey(d: Date): string {
   return new Date(d.getTime() + COLOMBIA_OFFSET_MS).toISOString().slice(0, 10);
 }
