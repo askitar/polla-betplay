@@ -188,19 +188,9 @@ export async function notifyStuckMatches(matches: StuckMatchRow[]) {
 }
 
 /**
- * Emails Oscar when a hand-entered score disagrees with the official result.
- *
- * MANUAL results are never auto-corrected anywhere in this codebase, on
- * purpose: they exist precisely to override the feed when it is wrong. The
- * cost of that rule is that a manual score is invisible to the daily
- * reconciliation, so a manual score that is ITSELF wrong can never be
- * caught by anything. That is not hypothetical: Fecha 13 sat at 1-2 when it
- * had actually finished 2-3, skewing everyone's points, and it surfaced
- * only because Oscar happened to remember the match.
- *
- * So the freeze stays and the silence goes. Once per day per match, same
- * SystemAlert throttle as the other alerts, so an uncorrected mismatch
- * reminds again tomorrow instead of being mentioned once and forgotten.
+ * Emails Oscar when an impossible manual result was reverted (a final score on
+ * a match that could not have finished yet). Once per day per match, same
+ * SystemAlert throttle as the other alerts.
  */
 export async function notifyManualMismatches(rows: ManualMismatchRow[]) {
   if (rows.length === 0) return { skipped: true, reason: "Sin diferencias." };
@@ -225,11 +215,7 @@ export async function notifyManualMismatches(rows: ManualMismatchRow[]) {
     from: process.env.EMAIL_FROM!,
     to: OPS_ALERT_EMAIL,
     subject:
-      toAlert.every((m) => m.reverted)
-        ? "Se cargaron resultados en partidos que no se habían jugado - La Polla BetPlay"
-        : toAlert.length === 1
-          ? "Un marcador manual no coincide con el resultado oficial - La Polla BetPlay"
-          : `${toAlert.length} marcadores manuales no coinciden con el resultado oficial - La Polla BetPlay`,
+      "Se cargaron resultados en partidos que no se habían jugado - La Polla BetPlay",
     html: manualMismatchEmailHtml(toAlert),
     text: manualMismatchEmailText(toAlert),
   });

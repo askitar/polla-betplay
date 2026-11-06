@@ -1,33 +1,22 @@
 export type RankStats = {
+  userName: string;
   points: number;
   exact: number;
-  winners: number;
-  goals: number;
-  uniques: number;
 };
 
-/** The published tiebreak order, see "Criterios de desempate" on /clasificacion. */
-export function compareRanking(a: RankStats, b: RankStats): number {
-  return (
-    b.points - a.points ||
-    b.exact - a.exact ||
-    b.winners - a.winners ||
-    b.goals - a.goals ||
-    b.uniques - a.uniques
-  );
-}
-
 /**
- * Sorts and assigns positions. Players still level after every tiebreak share
- * a position, as the rules promise, and the next position skips accordingly
- * (1, 2, 2, 4), so a tie is never settled by database row order.
+ * Only points decide a position: players level on points share it and the next
+ * position skips accordingly (1, 1, 3 or 1, 2, 2). Exact scores and the name
+ * only order the rows within a shared position, so the list stays stable.
  */
 export function rankEntries<T extends RankStats>(entries: T[]): Array<T & { rank: number }> {
-  const sorted = [...entries].sort(compareRanking);
+  const sorted = [...entries].sort(
+    (a, b) => b.points - a.points || b.exact - a.exact || a.userName.localeCompare(b.userName),
+  );
   const ranked: Array<T & { rank: number }> = [];
   sorted.forEach((entry, i) => {
     const previous = ranked[i - 1];
-    const rank = previous && compareRanking(previous, entry) === 0 ? previous.rank : i + 1;
+    const rank = previous && previous.points === entry.points ? previous.rank : i + 1;
     ranked.push({ ...entry, rank });
   });
   return ranked;

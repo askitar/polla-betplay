@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import type { ManualMismatchRow } from "@/lib/email-templates";
 import { notifyStuckMatches, notifyManualMismatches } from "@/lib/alerts";
 import { canHaveFinalResult } from "@/lib/match-time";
-import { isRegularSeasonRound } from "@/lib/season";
+import { isRegularSeasonRound, officialResultWins } from "@/lib/season";
 
 const API_BASE = "https://soccer.highlightly.net";
 
@@ -258,14 +258,14 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
       skippedNoMatch++;
       continue;
     }
-    if (existing.resultSource === "MANUAL") {
-      skippedManual++;
-      continue;
-    }
-
     const [rawHome, rawAway] = parseScore(f.state.score.current);
     const homeScore = swapped ? rawAway : rawHome;
     const awayScore = swapped ? rawHome : rawAway;
+
+    if (existing.resultSource === "MANUAL" && !officialResultWins(status, homeScore)) {
+      skippedManual++;
+      continue;
+    }
 
     await prisma.match.update({
       where: { id: existing.id },
@@ -423,22 +423,11 @@ export async function reconcileSeason(season = "2026") {
     const apiHomeScore = swapped ? rawAwayScore : rawHomeScore;
     const apiAwayScore = swapped ? rawHomeScore : rawAwayScore;
 
-    // A MANUAL result is a deliberate correction by the admin, so it is
-    // still never overwritten. But it used to be skipped in *silence*, and
-    // that is exactly how a wrong manual score survived: the one thing that
-    // checks the whole season against reality was also the one thing
-    // structurally unable to see it. Fecha 13 sat at 1-2 for days when it
-    // had finished 2-3, and no amount of reconciling would ever have caught
-    // it. Now a disagreement is reported so somebody can decide, which is
-    // the part that actually needs a human.
     if (existing.resultSource === "MANUAL") {
-      // The one MANUAL case that IS corrected automatically: a "final"
-      // result on a match that, by Dimayor's own kickoff time, cannot have
-      // finished yet. That is not an admin judgment to respect, it is
-      // impossible data — in practice a prediction typed into the admin
-      // result form — and it awards points for a game nobody has played.
-      // Leaving it for a human was exactly what let six of them pile up.
-      // Everything else MANUAL stays frozen and is only reported below.
+      // A "final" result on a match that, by Dimayor's own kickoff time, cannot
+      // have finished yet is impossible data: in practice a prediction typed
+      // into the admin result form. It is reverted and reported, because whoever
+      // did it probably still has to enter their real prediction.
       const apiKickoff = new Date(f.date);
       if (existing.status === "FINISHED" && !canHaveFinalResult(apiKickoff, new Date())) {
         const carries = status === "LIVE" || status === "FINISHED";
@@ -478,30 +467,15 @@ export async function reconcileSeason(season = "2026") {
           ourAway: existing.awayScore,
           realHome: carries ? apiHomeScore : null,
           realAway: carries ? apiAwayScore : null,
-          reverted: true,
         });
         continue;
       }
 
-      skippedManual++;
-      const disagrees =
-        status === "FINISHED" &&
-        apiHomeScore !== null &&
-        (existing.homeScore !== apiHomeScore || existing.awayScore !== apiAwayScore);
-      if (disagrees) {
-        manualMismatches.push({
-          matchId: existing.id,
-          homeTeam: homeName,
-          awayTeam: awayName,
-          jornada: existing.jornada.number,
-          ourHome: existing.homeScore,
-          ourAway: existing.awayScore,
-          realHome: apiHomeScore,
-          realAway: apiAwayScore,
-          reverted: false,
-        });
+      if (!officialResultWins(status, apiHomeScore)) {
+        skippedManual++;
+        continue;
       }
-      continue;
+      // Officially finished: falls through and the official score replaces it.
     }
 
     checked++;
@@ -558,9 +532,6 @@ export async function reconcileSeason(season = "2026") {
     );
   }
 
-  // Never auto-corrected (see the MANUAL branch above), but never silent
-  // either: this is the only pass that looks at the whole season, so if it
-  // says nothing about a bad manual score, nothing ever will.
   const manualMismatchAlert = await notifyManualMismatches(manualMismatches).catch(() => null);
 
   return {

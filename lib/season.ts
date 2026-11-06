@@ -15,6 +15,16 @@ export function isRegularSeasonRound(round: string | null | undefined): boolean 
   return /^Clausura - \d+$/.test((round ?? "").trim());
 }
 
+/**
+ * A hand-entered score only stands until the official result exists. Manual
+ * scores were wrong often enough (typos, scores entered before the feed caught
+ * up) to skew everyone's points, while the feed's final result has held up, so
+ * once a fixture is officially finished its score replaces whatever is there.
+ */
+export function officialResultWins(status: string, officialHomeScore: number | null): boolean {
+  return status === "FINISHED" && officialHomeScore !== null;
+}
+
 export type ProgressMatch = {
   jornadaNumber: number;
   status: string;

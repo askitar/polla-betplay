@@ -94,7 +94,7 @@ export async function submitManualResult(
   }
 
   // The match is shared across every club, so a correction here fixes it
-  // everywhere. MANUAL freezes it against the automatic API sync (task 10).
+  // everywhere. MANUAL holds it against the automatic sync until the official final result replaces it.
   await prisma.match.update({
     where: { id: matchId },
     data: { homeScore, awayScore, status: "FINISHED", resultSource: "MANUAL" },

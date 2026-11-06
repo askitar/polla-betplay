@@ -44,7 +44,7 @@ export function AdminResultForm({ clubId, matchId }: { clubId: string; matchId: 
       </div>
       <p className="mb-2.5 text-[11px] leading-snug text-ink-dim">
         Esto NO es tu predicción. Cambia el marcador final del partido para todos los
-        jugadores de todos los clubes. Úsalo solo si el resultado automático está mal.
+        jugadores de todos los clubes, hasta que llegue el resultado oficial, que lo reemplaza.
       </p>
 
       {!confirming ? (

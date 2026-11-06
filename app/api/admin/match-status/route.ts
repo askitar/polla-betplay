@@ -64,8 +64,8 @@ export async function POST(request: Request) {
   // Score corrections (e.g. the API froze on a stale live score) don't have
   // a reliable externalFixtureId to key off — our sync never stores one, it
   // matches fixtures by team id pair every run instead — so this path finds
-  // the match by team names, same as syncHighlightlyToday, and freezes the
-  // fix with MANUAL so the sync can never clobber it back to the stale value.
+  // the match by team names, same as syncHighlightlyToday. MANUAL holds the
+  // fix against the sync until the official final result replaces it.
   if (homeTeamName && awayTeamName) {
     const [homeTeam, awayTeam] = await Promise.all([
       prisma.team.findUnique({ where: { name: homeTeamName } }),

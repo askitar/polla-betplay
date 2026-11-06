@@ -9,9 +9,6 @@ export type LeaderboardEntry = {
   points: number;
   played: number;
   exact: number;
-  winners: number;
-  goals: number;
-  uniques: number;
   rank: number;
 };
 
@@ -43,13 +40,8 @@ export async function getClubLeaderboard(
     predictionIndex.get(p.userId)!.set(p.matchId, { homeScore: p.homeScore, awayScore: p.awayScore });
   }
 
-  const totals = new Map<
-    string,
-    { points: number; played: number; exact: number; winners: number; goals: number; uniques: number }
-  >();
-  for (const mem of memberships) {
-    totals.set(mem.userId, { points: 0, played: 0, exact: 0, winners: 0, goals: 0, uniques: 0 });
-  }
+  const totals = new Map<string, { points: number; played: number; exact: number }>();
+  for (const mem of memberships) totals.set(mem.userId, { points: 0, played: 0, exact: 0 });
 
   for (const match of scoredMatches) {
     if (match.homeScore == null || match.awayScore == null) continue;
@@ -73,9 +65,6 @@ export async function getClubLeaderboard(
       if (!b) continue;
       entry.points += b.total;
       if (b.exact) entry.exact++;
-      if (b.winner) entry.winners++;
-      if (b.goal) entry.goals++;
-      if (b.uniqueBonus) entry.uniques++;
     }
   }
 
@@ -88,9 +77,6 @@ export async function getClubLeaderboard(
       points: t.points,
       played: t.played,
       exact: t.exact,
-      winners: t.winners,
-      goals: t.goals,
-      uniques: t.uniques,
     };
   });
 

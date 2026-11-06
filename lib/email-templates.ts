@@ -375,12 +375,6 @@ export type ManualMismatchRow = {
   /** Null when the match has no official score yet (not played). */
   realHome: number | null;
   realAway: number | null;
-  /**
-   * true = the manual result was impossible (the match could not have
-   * finished yet) and the reconciliation already reverted it on its own.
-   * false = a genuine disagreement left frozen for a human to decide.
-   */
-  reverted: boolean;
 };
 
 function officialLabel(m: ManualMismatchRow) {
@@ -388,46 +382,19 @@ function officialLabel(m: ManualMismatchRow) {
 }
 
 function manualHeadline(rows: ManualMismatchRow[]) {
-  if (rows.every((r) => r.reverted)) {
-    return rows.length === 1
-      ? "Se cargó un resultado final en un partido que no se había jugado"
-      : `Se cargaron ${rows.length} resultados finales en partidos que no se habían jugado`;
-  }
   return rows.length === 1
-    ? "Un marcador puesto a mano no coincide con el resultado oficial"
-    : `${rows.length} marcadores puestos a mano no coinciden con el resultado oficial`;
+    ? "Se cargó un resultado final en un partido que no se había jugado"
+    : `Se cargaron ${rows.length} resultados finales en partidos que no se habían jugado`;
 }
 
-function manualIntro(rows: ManualMismatchRow[]) {
-  const parts: string[] = [];
-  if (rows.some((r) => r.reverted)) {
-    parts.push(
-      "Alguien con permiso de admin cargó un resultado final antes de que el partido terminara. " +
-        "Casi siempre es una predicción escrita en el cuadro de resultado oficial por error. " +
-        "Ya lo revertí, pero su predicción real probablemente no quedó guardada: avísale para que la ponga mientras el partido siga abierto.",
-    );
-  }
-  if (rows.some((r) => !r.reverted)) {
-    parts.push(
-      "Los marcadores puestos a mano nunca los toca la revisión automática, a propósito. " +
-        "Si uno quedó mal, los puntos de todos salen mal, así que revísalos y corrígelos si aplica.",
-    );
-  }
-  return parts.join(" ");
+function manualIntro() {
+  return (
+    "Alguien con permiso de admin cargó un resultado final antes de que el partido terminara. " +
+    "Casi siempre es una predicción escrita en el cuadro de resultado oficial por error. " +
+    "Ya lo revertí, pero su predicción real probablemente no quedó guardada: avísale para que la ponga mientras el partido siga abierto."
+  );
 }
 
-/**
- * Hand-entered scores that disagree with the official result. Two kinds:
- *
- * - Impossible ones (a "final" result before the match could have ended)
- *   are already reverted by the reconciliation; the email says so, because
- *   the admin who did it most likely typed a prediction into the wrong box
- *   and still needs to re-enter their real prediction.
- * - Genuine disagreements stay frozen: a MANUAL score is an admin decision,
- *   and overriding it would undo the very corrections it exists for. But it
- *   is invisible to the daily reconciliation, so it has to be said out loud
- *   or a wrong one stays wrong forever and quietly skews everyone's points.
- */
 export function manualMismatchEmailHtml(rows: ManualMismatchRow[]) {
   const items = rows
     .map(
@@ -439,7 +406,6 @@ export function manualMismatchEmailHtml(rows: ManualMismatchRow[]) {
                   En la polla: <b style="color:#CE1126;">${m.ourHome ?? "-"}-${m.ourAway ?? "-"}</b>
                   &nbsp;&middot;&nbsp; oficial: <b style="color:#2FAE66;">${officialLabel(m)}</b>
                 </div>
-                ${m.reverted ? '<div style="color:#FFC72C;font-size:12px;margin-top:3px;">Ya lo corregí automáticamente: el partido aún no había terminado.</div>' : ""}
               </td>
             </tr>`,
     )
@@ -469,7 +435,7 @@ export function manualMismatchEmailHtml(rows: ManualMismatchRow[]) {
             </tr>
             <tr>
               <td style="color:#F3EFDD;font-size:14px;line-height:1.6;padding-bottom:8px;">
-                ${escapeHtml(manualIntro(rows))}
+                ${escapeHtml(manualIntro())}
               </td>
             </tr>
             <tr>
@@ -488,7 +454,7 @@ export function manualMismatchEmailHtml(rows: ManualMismatchRow[]) {
 export function manualMismatchEmailText(rows: ManualMismatchRow[]) {
   const lines = rows.map(
     (m) =>
-      `- Fecha ${m.jornada}, ${m.homeTeam} vs ${m.awayTeam}: en la polla ${m.ourHome ?? "-"}-${m.ourAway ?? "-"}, oficial ${officialLabel(m)}${m.reverted ? " (ya corregido automáticamente)" : ""}`,
+      `- Fecha ${m.jornada}, ${m.homeTeam} vs ${m.awayTeam}: en la polla ${m.ourHome ?? "-"}-${m.ourAway ?? "-"}, oficial ${officialLabel(m)}`,
   );
-  return `${manualHeadline(rows)}\n\n${manualIntro(rows)}\n\n${lines.join("\n")}`;
+  return `${manualHeadline(rows)}\n\n${manualIntro()}\n\n${lines.join("\n")}`;
 }

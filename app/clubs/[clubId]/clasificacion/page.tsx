@@ -103,21 +103,11 @@ export default async function ClasificacionPage({
         en cada partido, para que nadie se copie antes.
       </p>
 
-      <SectionLabel className="mt-7">Criterios de desempate</SectionLabel>
+      <SectionLabel className="mt-7">Empates</SectionLabel>
       <div className="card">
         <p className="text-xs leading-relaxed text-ink-dim">
-          Si dos o más jugadores quedan empatados en puntos, la posición se define con estos
-          criterios, en este orden, hasta romper el empate:
-        </p>
-        <ol className="mt-2.5 flex flex-col gap-1.5 pl-4 text-xs leading-relaxed text-ink-dim">
-          <li className="list-decimal">Mayor número de marcadores exactos acertados.</li>
-          <li className="list-decimal">Mayor número de ganadores o empates acertados.</li>
-          <li className="list-decimal">Mayor número de goles acertados.</li>
-          <li className="list-decimal">Mayor número de predicciones únicas.</li>
-        </ol>
-        <p className="mt-2.5 text-xs leading-relaxed text-ink-faint">
-          Si el empate persiste después de todos los criterios, los jugadores comparten la misma
-          posición.
+          Si dos o más jugadores tienen los mismos puntos, comparten el puesto. Por ejemplo: dos en
+          primer lugar y el siguiente en tercero, o uno en primer lugar y dos en segundo.
         </p>
       </div>
     </div>

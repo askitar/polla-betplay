@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { computePollaProgress, isRegularSeasonRound, type ProgressMatch } from "./season";
+import { computePollaProgress, isRegularSeasonRound, officialResultWins, type ProgressMatch } from "./season";
 
 const kickoff = new Date("2026-11-12T21:00:00Z");
 
@@ -34,6 +34,15 @@ test("only regular-season Clausura rounds count", () => {
     undefined,
   ]) {
     assert.equal(isRegularSeasonRound(r), false, String(r));
+  }
+});
+
+test("a manual score only gives way to an official final result", () => {
+  assert.equal(officialResultWins("FINISHED", 1), true);
+  assert.equal(officialResultWins("FINISHED", 0), true);
+  assert.equal(officialResultWins("FINISHED", null), false);
+  for (const s of ["SCHEDULED", "LIVE", "POSTPONED", "CANCELLED"]) {
+    assert.equal(officialResultWins(s, 1), false, s);
   }
 });
 
