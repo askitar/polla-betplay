@@ -12,6 +12,8 @@ import {
   CircleCheck,
   Circle,
   AlertTriangle,
+  ClipboardCheck,
+  X,
 } from "lucide-react";
 import { TeamBadge } from "@/components/ui/TeamBadge";
 import { ScoreDial } from "@/components/ui/ScoreDial";
@@ -109,9 +111,12 @@ export function MatchCard({
     home: match.myPrediction?.homeScore ?? null,
     away: match.myPrediction?.awayScore ?? null,
   });
-  const [justSaved, setJustSaved] = useState(false);
+  // What the server last confirmed. Kept locally too so the card reflects a
+  // save immediately, even on a page whose data has not been refreshed yet.
+  const [savedPrediction, setSavedPrediction] = useState(match.myPrediction);
   const [celebrate, setCelebrate] = useState(false);
   const [showReveal, setShowReveal] = useState(false);
+  const [showRoster, setShowRoster] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -119,9 +124,9 @@ export function MatchCard({
   const complete = draft.home != null && draft.away != null;
   const dirty =
     complete &&
-    (!match.myPrediction ||
-      match.myPrediction.homeScore !== draft.home ||
-      match.myPrediction.awayScore !== draft.away);
+    (!savedPrediction ||
+      savedPrediction.homeScore !== draft.home ||
+      savedPrediction.awayScore !== draft.away);
 
   function handleSave() {
     if (draft.home == null || draft.away == null) return;
@@ -129,8 +134,7 @@ export function MatchCard({
     startTransition(async () => {
       try {
         await savePrediction(clubId, match.id, draft.home!, draft.away!);
-        setJustSaved(true);
-        setTimeout(() => setJustSaved(false), 2000);
+        setSavedPrediction({ homeScore: draft.home!, awayScore: draft.away! });
         setCelebrate(true);
         setTimeout(() => setCelebrate(false), 1400);
       } catch (e) {
@@ -273,26 +277,83 @@ export function MatchCard({
 
         {!finished && !match.locked && (
           <div className="mt-4 flex flex-col items-center gap-1.5">
-            <button
-              onClick={handleSave}
-              disabled={!complete || pending || (!dirty && !justSaved)}
-              className={`${dirty ? "btn-primary" : justSaved ? "btn-secondary btn-saved" : "btn-secondary"} px-6 py-2.5 text-[13px] ${
-                !complete ? "opacity-45" : ""
-              }`}
-            >
-              {justSaved && !dirty ? (
-                <>
-                  <Check size={14} /> Predicción guardada
-                </>
-              ) : pending ? (
-                "Guardando..."
-              ) : !complete ? (
-                "Completa el marcador"
-              ) : (
-                "Guardar predicción"
-              )}
-            </button>
+            {dirty ? (
+              <button onClick={handleSave} disabled={pending} className="btn-primary px-6 py-2.5 text-[13px]">
+                {pending ? "Guardando..." : savedPrediction ? "Guardar el cambio" : "Guardar predicción"}
+              </button>
+            ) : savedPrediction ? (
+              // Already saved and unchanged. This used to be a greyed-out
+              // "Guardar predicción", which read as "blocked"; say what is
+              // actually going on instead.
+              <>
+                <span className="btn-secondary btn-saved pointer-events-none px-5 py-2 text-[13px]">
+                  <Check size={14} /> Tu predicción está guardada: {savedPrediction.homeScore}–
+                  {savedPrediction.awayScore}
+                </span>
+                <span className="text-[11px] text-ink-faint">Mueve las flechas si quieres cambiarla.</span>
+              </>
+            ) : (
+              <button disabled className="btn-secondary px-6 py-2.5 text-[13px] opacity-50">
+                Completa el marcador
+              </button>
+            )}
             {error && <p className="text-xs text-flag-red">{error}</p>}
+          </div>
+        )}
+
+        {/* Admin only: who already has a prediction in and who does not, by
+            name and never by score, so they can tell "did it save?" apart
+            from "did they not do it?" without peeking at anyone's pick. */}
+        {isAdmin && !finished && match.totalMembers > 0 && (
+          <div className="mt-3 border-t border-dashed border-white/10 pt-3">
+            <button
+              type="button"
+              onClick={() => setShowRoster((v) => !v)}
+              className="flex w-full items-center justify-between gap-2 rounded-xl px-1 py-1 text-left text-[12px] text-ink-dim transition hover:text-ink"
+            >
+              <span className="flex items-center gap-1.5">
+                <ClipboardCheck size={13} className="text-gold-dim" />
+                Admin: quién ya predijo ({match.predictedCount}/{match.totalMembers})
+              </span>
+              <ChevronDown
+                size={14}
+                className={`transition-transform duration-300 ${showRoster ? "rotate-180" : ""}`}
+              />
+            </button>
+            {showRoster && (
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <div className="rounded-xl bg-white/[0.04] p-2.5">
+                  <div className="mb-1.5 font-condensed text-[10.5px] tracking-[0.12em] text-acierto">
+                    YA PUSIERON ({match.predictedMemberNames.length})
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {match.predictedMemberNames.length === 0 && (
+                      <span className="text-[12px] text-ink-faint">Nadie todavía.</span>
+                    )}
+                    {match.predictedMemberNames.map((n) => (
+                      <span key={n} className="chip chip-green normal-case tracking-normal">
+                        <Check size={11} /> {n}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-xl bg-white/[0.04] p-2.5">
+                  <div className="mb-1.5 font-condensed text-[10.5px] tracking-[0.12em] text-flag-red">
+                    FALTAN ({match.pendingMemberNames.length})
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {match.pendingMemberNames.length === 0 && (
+                      <span className="text-[12px] text-ink-faint">Nadie, todos pusieron.</span>
+                    )}
+                    {match.pendingMemberNames.map((n) => (
+                      <span key={n} className="chip chip-red normal-case tracking-normal">
+                        <X size={11} /> {n}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

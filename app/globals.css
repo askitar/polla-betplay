@@ -506,18 +506,29 @@ body {
   }
 
   /* Gold gradient numerals for scores and points. */
+  /* No filter/drop-shadow here on purpose: combined with background-clip:
+     text it makes Chrome on several Android GPUs drop the gradient fill and
+     paint only the shadow, so the numbers came out as a dim red smudge. */
   .num-gold {
+    color: var(--color-gold);
     background: linear-gradient(180deg, var(--color-gold-bright) 0%, var(--color-gold) 55%, #e0a51a 100%);
     -webkit-background-clip: text;
     background-clip: text;
-    color: transparent;
-    filter: drop-shadow(0 2px 10px rgba(255, 199, 44, 0.28));
+    -webkit-text-fill-color: transparent;
   }
   .num-ink {
+    color: var(--color-ink);
     background: linear-gradient(180deg, #ffffff 0%, #e9e6dd 60%, #b9b6ad 100%);
     -webkit-background-clip: text;
     background-clip: text;
-    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
+  @supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+    .num-gold,
+    .num-ink {
+      background: none;
+      -webkit-text-fill-color: currentColor;
+    }
   }
 
   /* Small translucent pill for metadata (fecha, state, deltas). */

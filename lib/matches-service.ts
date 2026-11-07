@@ -43,6 +43,13 @@ export type MatchView = {
     prediction: { homeScore: number; awayScore: number } | null;
   }> | null;
   missingMemberNames: string[] | null;
+  /**
+   * Names only, never scores: who has a prediction in and who still owes
+   * one. Used by the admin view so they can confirm whether someone's
+   * prediction actually landed, without seeing what it was.
+   */
+  predictedMemberNames: string[];
+  pendingMemberNames: string[];
   predictedCount: number;
   totalMembers: number;
 };
@@ -169,6 +176,12 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
       selfMissingWarning: withinWarning && !mine,
       membersReveal,
       missingMemberNames,
+      predictedMemberNames: memberships
+        .filter((mem) => predictedIds?.has(mem.userId))
+        .map((mem) => mem.user.name ?? "Sin nombre"),
+      pendingMemberNames: memberships
+        .filter((mem) => !predictedIds?.has(mem.userId))
+        .map((mem) => mem.user.name ?? "Sin nombre"),
       predictedCount: predictedIds?.size ?? 0,
       totalMembers: memberships.length,
     };

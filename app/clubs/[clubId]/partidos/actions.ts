@@ -46,6 +46,7 @@ export async function savePrediction(
   });
 
   revalidatePath(`/clubs/${clubId}/partidos`);
+  revalidatePath(`/clubs/${clubId}/cronograma`);
 }
 
 export async function submitManualResult(
