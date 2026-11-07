@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { Trophy, Flag } from "lucide-react";
+import type { CSSProperties } from "react";
+import { GlassIcon } from "@/components/ui/GlassIcon";
 import { COLOMBIA_TIME_ZONE } from "@/lib/match-time";
 import type { PollaProgress } from "@/lib/season";
 
@@ -15,28 +18,30 @@ export function PollaProgressCard({
 
   if (progress.isOver) {
     return (
-      <div className="card mb-5">
-        <div className="eyebrow">ASÍ VA LA POLLA</div>
-        <div className="mt-1 font-display text-2xl leading-tight">¡La polla terminó!</div>
-        <p className="mt-1.5 text-[13px] leading-snug text-ink-dim">
-          Ya se jugaron las {totalFechas} fechas del todos contra todos, que es hasta donde va la
-          polla. Lo que sigue en la liga (los 8 clasificados, fase de grupos y final) no cuenta.
-        </p>
-        <Link
-          href={`/clubs/${clubId}/clasificacion`}
-          className="mt-2.5 inline-block text-[13px] font-semibold text-gold"
-        >
-          Ver la tabla final
-        </Link>
+      <div className="card rise mb-5 flex items-center gap-4">
+        <GlassIcon icon={Trophy} size="lg" />
+        <div className="min-w-0">
+          <div className="eyebrow">ASÍ VA LA POLLA</div>
+          <div className="mt-0.5 font-display text-2xl leading-tight">¡La polla terminó!</div>
+          <p className="mt-1 text-[13px] leading-snug text-ink-dim">
+            Se jugaron las {totalFechas} fechas del todos contra todos. Lo que sigue en la liga
+            (los 8, cuadrangulares y final) no cuenta.
+          </p>
+          <Link
+            href={`/clubs/${clubId}/clasificacion`}
+            className="mt-2 inline-block text-[13px] font-semibold text-gold"
+          >
+            Ver la tabla final
+          </Link>
+        </div>
       </div>
     );
   }
 
   const details = [
-    live > 0 ? `${live} en vivo` : null,
-    postponed > 0 ? `${postponed} ${postponed === 1 ? "aplazado sin fecha" : "aplazados sin fecha"}` : null,
+    postponed > 0 ? `${postponed} ${postponed === 1 ? "aplazado" : "aplazados"}` : null,
     lastKickoff
-      ? `último partido: ${lastKickoff.toLocaleDateString("es-CO", {
+      ? `cierra el ${lastKickoff.toLocaleDateString("es-CO", {
           timeZone: COLOMBIA_TIME_ZONE,
           weekday: "short",
           day: "numeric",
@@ -46,42 +51,44 @@ export function PollaProgressCard({
   ].filter(Boolean);
 
   return (
-    <div className="card mb-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="eyebrow">ASÍ VA LA POLLA</div>
-          <div className="mt-1 font-display text-2xl leading-tight">
-            Fecha {currentFecha} de {totalFechas}
-          </div>
-        </div>
-        <div className="shrink-0 text-right">
-          <div className="font-display text-2xl leading-tight text-gold">{remaining}</div>
-          <div className="text-[11px] leading-tight text-ink-dim">
-            {remaining === 1 ? "partido queda" : "partidos quedan"}
-            <br />
-            para terminar
-          </div>
+    <div className="card rise mb-5 flex items-center gap-4 sm:gap-6">
+      <div className="ring" style={{ "--p": percent } as CSSProperties} aria-hidden>
+        <div className="flex h-full w-full flex-col items-center justify-center">
+          <span className="num-gold font-display text-[26px] leading-none">{remaining}</span>
+          <span className="font-condensed text-[9px] tracking-[0.14em] text-ink-dim">QUEDAN</span>
         </div>
       </div>
 
-      <div
-        className="mt-3 h-1.5 overflow-hidden rounded-full bg-line"
-        role="progressbar"
-        aria-valuenow={finished}
-        aria-valuemin={0}
-        aria-valuemax={totalMatches}
-        aria-label={`${finished} de ${totalMatches} partidos jugados`}
-      >
-        <div className="h-full rounded-full bg-gold" style={{ width: `${percent}%` }} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="eyebrow">ASÍ VA LA POLLA</span>
+          {live > 0 && (
+            <span className="chip chip-red">
+              <span className="live-dot" /> {live} en vivo
+            </span>
+          )}
+        </div>
+        <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
+          <span className="font-display text-[26px] leading-tight sm:text-3xl">
+            Fecha {currentFecha}
+            <span className="text-ink-faint"> / {totalFechas}</span>
+          </span>
+          <span className="text-[12px] text-ink-dim">
+            {remaining} {remaining === 1 ? "partido" : "partidos"} para terminar
+          </span>
+        </div>
+        <div className="mt-1.5 text-[11.5px] text-ink-faint">
+          {finished} de {totalMatches} jugados · {percent}%
+          {details.length > 0 ? ` · ${details.join(" · ")}` : ""}
+        </div>
+        <p className="mt-2 flex items-start gap-1.5 text-[12px] leading-snug text-ink-dim">
+          <Flag size={12} className="mt-0.5 shrink-0 text-gold-dim" />
+          <span>
+            La polla va hasta el final del todos contra todos ({totalFechas} fechas). Los 8, los
+            cuadrangulares y la final no cuentan.
+          </span>
+        </p>
       </div>
-      <div className="mt-1.5 text-[11px] text-ink-dim">
-        {finished} de {totalMatches} jugados{details.length > 0 ? ` · ${details.join(" · ")}` : ""}
-      </div>
-
-      <p className="mt-2.5 text-[13px] leading-snug text-ink-dim">
-        La polla va solo hasta que se acabe el todos contra todos (las {totalFechas} fechas). Los
-        partidos de los 8 clasificados, la fase de grupos y la final no cuentan.
-      </p>
     </div>
   );
 }

@@ -17,15 +17,17 @@ export default async function ClubPerfilPage() {
   ]);
 
   return (
-    <div>
-      <SectionLabel>Tu perfil</SectionLabel>
-      <ProfileForm
-        name={session.user.name ?? ""}
-        email={session.user.email ?? ""}
-        image={session.user.image ?? null}
-        teams={teams}
-        favoriteTeamId={user?.favoriteTeamId ?? null}
-      />
+    <div className="mx-auto max-w-lg">
+      <SectionLabel hint="tu foto y nombre salen en la tabla">Tu perfil</SectionLabel>
+      <div className="card rise p-5">
+        <ProfileForm
+          name={session.user.name ?? ""}
+          email={session.user.email ?? ""}
+          image={session.user.image ?? null}
+          teams={teams}
+          favoriteTeamId={user?.favoriteTeamId ?? null}
+        />
+      </div>
     </div>
   );
 }

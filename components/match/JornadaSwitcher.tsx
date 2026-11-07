@@ -15,21 +15,25 @@ export function JornadaSwitcher({
   const next = idx >= 0 && idx < jornadas.length - 1 ? jornadas[idx + 1] : null;
 
   return (
-    <div className="mb-5 flex items-center justify-center gap-4">
+    <div className="mb-5 flex items-center justify-center gap-3">
       <Link
         href={prev ? `/clubs/${clubId}/cronograma?fecha=${prev}` : "#"}
         className={`icon-btn ${!prev ? "pointer-events-none opacity-30" : ""}`}
         aria-disabled={!prev}
+        aria-label="Fecha anterior"
       >
         <ChevronLeft size={16} />
       </Link>
-      <div className="font-condensed text-sm tracking-[0.15em] text-ink-dim">
-        FECHA <span className="text-gold">{current}</span>
+      <div className="glass flex min-w-[150px] items-baseline justify-center gap-2 rounded-full px-5 py-2">
+        <span className="font-condensed text-xs tracking-[0.2em] text-ink-dim">FECHA</span>
+        <span className="num-gold font-display text-2xl leading-none">{current}</span>
+        <span className="font-condensed text-xs text-ink-faint">de {jornadas[jornadas.length - 1]}</span>
       </div>
       <Link
         href={next ? `/clubs/${clubId}/cronograma?fecha=${next}` : "#"}
         className={`icon-btn ${!next ? "pointer-events-none opacity-30" : ""}`}
         aria-disabled={!next}
+        aria-label="Fecha siguiente"
       >
         <ChevronRight size={16} />
       </Link>

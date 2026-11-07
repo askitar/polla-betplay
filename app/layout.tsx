@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Anton, Barlow, Barlow_Condensed } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SoundEffects } from "@/components/SoundEffects";
@@ -24,7 +24,14 @@ const barlow = Barlow({
 
 export const metadata: Metadata = {
   title: "La Polla BetPlay",
-  description: "Predicciones de la Liga BetPlay Dimayor entre tu combo.",
+  description: "La polla de predicciones de la Liga BetPlay para tu combo.",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#06070b",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -38,6 +45,9 @@ export default function RootLayout({
       className={`${anton.variable} ${barlowCondensed.variable} ${barlow.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans">
+        <div className="bg-aurora" aria-hidden>
+          <div className="grid" />
+        </div>
         {children}
         <SoundEffects />
         <Analytics />

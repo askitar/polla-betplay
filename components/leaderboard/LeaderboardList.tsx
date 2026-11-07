@@ -1,28 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Star } from "lucide-react";
+import { ChevronDown, Crown, Medal, Award } from "lucide-react";
+import { GlassIcon } from "@/components/ui/GlassIcon";
 import { PlayerStatsPanel } from "@/components/leaderboard/PlayerStatsPanel";
 import type { LeaderboardEntry } from "@/lib/leaderboard-service";
 import type { PlayerStats } from "@/lib/player-stats-service";
 
-// The top 3 are the ones actually in title contention, so they get a medal
-// treatment beyond the plain rank digit: a colored ring around the number
-// and a soft gradient underline instead of the flat row divider.
-const MEDAL_STYLES = [
-  {
-    badge: "text-gold ring-1 ring-gold/60 shadow-[0_0_14px_rgba(255,199,44,0.4)]",
-    underline: "after:from-transparent after:via-gold after:to-transparent",
-  },
-  {
-    badge: "text-silver ring-1 ring-silver/60 shadow-[0_0_12px_rgba(213,221,226,0.3)]",
-    underline: "after:from-transparent after:via-silver after:to-transparent",
-  },
-  {
-    badge: "text-bronze ring-1 ring-bronze/60 shadow-[0_0_12px_rgba(217,147,86,0.3)]",
-    underline: "after:from-transparent after:via-bronze after:to-transparent",
-  },
-];
+const MEDAL = {
+  1: { icon: Crown, tint: "gold" },
+  2: { icon: Medal, tint: "silver" },
+  3: { icon: Award, tint: "bronze" },
+} as const;
 
 export function LeaderboardList({
   leaderboard,
@@ -34,62 +23,74 @@ export function LeaderboardList({
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
   return (
-    <>
+    <div className="flex flex-col gap-2">
       {leaderboard.map((entry, i) => {
         const isExpanded = expandedUserId === entry.userId;
-        const medal = MEDAL_STYLES[entry.rank - 1];
+        const medal = MEDAL[entry.rank as 1 | 2 | 3];
         return (
           <div
             key={entry.userId}
-            className={`relative ${
-              medal
-                ? `after:absolute after:inset-x-3 after:bottom-0 after:h-px after:bg-gradient-to-r ${medal.underline}`
-                : i < leaderboard.length - 1
-                  ? "border-b border-line"
-                  : ""
-            }`}
+            className={`rise overflow-hidden rounded-2xl border transition-colors ${
+              medal ? "border-white/10 bg-white/[0.035]" : "border-white/[0.06] bg-white/[0.02]"
+            } ${isExpanded ? "ring-1 ring-gold/30" : ""}`}
+            style={{ "--i": Math.min(i, 8) } as React.CSSProperties}
           >
             <button
               type="button"
               onClick={() => setExpandedUserId(isExpanded ? null : entry.userId)}
-              className="hover-glow -mx-1 flex w-full items-center gap-2.5 rounded-lg px-1 py-3 text-left"
+              aria-expanded={isExpanded}
+              className="hover-glow flex w-full items-center gap-3 px-3 py-3 text-left"
             >
-              <div
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-display text-lg ${
-                  medal ? medal.badge : "text-ink-faint"
-                }`}
-              >
-                {entry.rank}
-              </div>
-              <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-line-strong bg-card-hover">
+              {medal ? (
+                <GlassIcon icon={medal.icon} tint={medal.tint} size="sm" />
+              ) : (
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[30%] border border-white/[0.08] bg-white/[0.03] font-display text-base text-ink-faint">
+                  {entry.rank}
+                </div>
+              )}
+              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/15 bg-card-hover shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]">
                 {entry.userImage ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={entry.userImage} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  <span className="flex h-full w-full items-center justify-center font-condensed text-xs text-ink-dim">
+                  <span className="flex h-full w-full items-center justify-center font-condensed text-xs font-semibold text-ink-dim">
                     {entry.userName.slice(0, 2).toUpperCase()}
                   </span>
                 )}
               </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-1.5 text-[15px] font-semibold">
-                  {entry.userName}
-                  {entry.rank === 1 && entry.points > 0 && <Star size={13} className="fill-gold text-gold" />}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-[15px] font-semibold">{entry.userName}</span>
+                  {medal && <span className="font-display text-xs text-ink-faint">{entry.rank}°</span>}
                 </div>
-                <div className="text-xs text-ink-dim">
-                  {entry.played} predicciones · {entry.exact} exactas
+                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-ink-dim">
+                  <span>{entry.played} pred. · {entry.exact} exactas</span>
+                  <span
+                    className={`chip ${
+                      entry.lastPoints == null ? "" : entry.lastPoints > 0 ? "chip-green" : ""
+                    }`}
+                    title="Puntos en el último partido"
+                  >
+                    {entry.lastPoints == null ? "sin pred. últ." : `+${entry.lastPoints} últ.`}
+                  </span>
                 </div>
               </div>
-              <div className="font-display text-2xl text-gold">{entry.points}</div>
+              <div className="flex items-center gap-2">
+                <span className="num-gold font-display text-[28px] leading-none">{entry.points}</span>
+                <ChevronDown
+                  size={16}
+                  className={`text-ink-faint transition-transform duration-300 ${isExpanded ? "rotate-180" : ""}`}
+                />
+              </div>
             </button>
             {isExpanded && statsByUser[entry.userId] && (
-              <div className="pb-3">
+              <div className="px-3 pb-3">
                 <PlayerStatsPanel stats={statsByUser[entry.userId]} />
               </div>
             )}
           </div>
         );
       })}
-    </>
+    </div>
   );
 }

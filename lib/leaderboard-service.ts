@@ -10,11 +10,23 @@ export type LeaderboardEntry = {
   played: number;
   exact: number;
   rank: number;
+  /** Points earned in the most recent scored match, null if they had no prediction on it. */
+  lastPoints: number | null;
 };
 
-export async function getClubLeaderboard(
-  clubId: string,
-): Promise<{ entries: LeaderboardEntry[]; hasLiveMatch: boolean }> {
+export type LastScoredMatch = {
+  homeTeam: string;
+  awayTeam: string;
+  homeScore: number;
+  awayScore: number;
+  isLive: boolean;
+};
+
+export async function getClubLeaderboard(clubId: string): Promise<{
+  entries: LeaderboardEntry[];
+  hasLiveMatch: boolean;
+  lastMatch: LastScoredMatch | null;
+}> {
   // Shared per-request with the matches/stats services (lib/club-data.ts),
   // so rendering a page that shows both the table and the fixtures reads
   // each of these once rather than twice.
@@ -25,10 +37,10 @@ export async function getClubLeaderboard(
   ]);
 
   // LIVE matches count toward the table too, using their current
-  // (not-yet-final) score — provisional points that move as the match does,
-  // for excitement, replaced by the real result once the match ends.
+  // (not-yet-final) score: provisional points that move as the match does,
+  // replaced by the real result once the match ends.
   const scoredMatches = allMatches.filter(
-    (m) => m.status === "FINISHED" || m.status === "LIVE",
+    (m) => (m.status === "FINISHED" || m.status === "LIVE") && m.homeScore != null && m.awayScore != null,
   );
   const scoredIds = new Set(scoredMatches.map((m) => m.id));
   const hasLiveMatch = scoredMatches.some((m) => m.status === "LIVE");
@@ -43,26 +55,32 @@ export async function getClubLeaderboard(
   const totals = new Map<string, { points: number; played: number; exact: number }>();
   for (const mem of memberships) totals.set(mem.userId, { points: 0, played: 0, exact: 0 });
 
-  for (const match of scoredMatches) {
-    if (match.homeScore == null || match.awayScore == null) continue;
+  // The latest kickoff among scored matches is "the last match" everyone is
+  // asking about after a round: what did each person get out of it.
+  const latest = scoredMatches.reduce<(typeof scoredMatches)[number] | null>(
+    (best, m) => (!best || m.kickoff.getTime() > best.kickoff.getTime() ? m : best),
+    null,
+  );
+  const lastPointsByUser = new Map<string, number | null>();
 
+  for (const match of scoredMatches) {
     const memberPredictions = memberships.map((mem) => ({
       userId: mem.userId,
       prediction: predictionIndex.get(mem.userId)?.get(match.id) ?? null,
     }));
     const breakdownByUser = computeClubMatchBreakdown(
-      { homeScore: match.homeScore, awayScore: match.awayScore },
+      { homeScore: match.homeScore!, awayScore: match.awayScore! },
       memberPredictions,
     );
 
     for (const mem of memberships) {
       const pred = predictionIndex.get(mem.userId)?.get(match.id);
-      if (!pred) continue;
+      const b = breakdownByUser.get(mem.userId);
+      if (match.id === latest?.id) lastPointsByUser.set(mem.userId, pred && b ? b.total : null);
+      if (!pred || !b) continue;
 
       const entry = totals.get(mem.userId)!;
       entry.played++;
-      const b = breakdownByUser.get(mem.userId);
-      if (!b) continue;
       entry.points += b.total;
       if (b.exact) entry.exact++;
     }
@@ -77,8 +95,21 @@ export async function getClubLeaderboard(
       points: t.points,
       played: t.played,
       exact: t.exact,
+      lastPoints: lastPointsByUser.get(mem.userId) ?? null,
     };
   });
 
-  return { entries: rankEntries(unranked), hasLiveMatch };
+  return {
+    entries: rankEntries(unranked),
+    hasLiveMatch,
+    lastMatch: latest
+      ? {
+          homeTeam: latest.homeTeam.name,
+          awayTeam: latest.awayTeam.name,
+          homeScore: latest.homeScore!,
+          awayScore: latest.awayScore!,
+          isLive: latest.status === "LIVE",
+        }
+      : null,
+  };
 }

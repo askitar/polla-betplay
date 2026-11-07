@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Timer } from "lucide-react";
 
 function formatRemaining(ms: number): string {
   if (ms <= 0) return "¡Arrancó!";
@@ -28,8 +29,9 @@ export function CountdownTimer({ kickoff }: { kickoff: string }) {
   }, [target]);
 
   return (
-    <div className="absolute -top-3 right-4 flex items-center gap-1.5 whitespace-nowrap rounded bg-pitch px-2.5 py-1 ring-1 ring-gold/50">
-      <span className="font-condensed text-[10px] tracking-wide text-gold-dim">COMIENZA EN</span>
+    <div className="glass absolute -top-3.5 right-4 flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 ring-1 ring-gold/50">
+      <Timer size={12} className="text-gold" />
+      <span className="font-condensed text-[10px] tracking-[0.12em] text-ink-dim">COMIENZA EN</span>
       <span className="font-condensed text-sm font-bold tracking-wide text-gold">{label}</span>
     </div>
   );

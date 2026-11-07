@@ -1,29 +1,28 @@
 @import "tailwindcss";
 
 @theme inline {
-  /* Cooler, more futuristic dark palette — near-black instead of the old
-     stadium green, gold kept as the brand/primary accent, cyan added as a
-     second "tech" accent for interactive/success states. Red stays reserved
-     for LIVE (sports convention), never repurposed for anything else. */
-  --color-pitch: #07080b;
-  --color-card: #12141a;
-  --color-card-hover: #171a21;
-  --color-line: #1c1f26;
-  --color-line-strong: #2b303a;
+  /* Night palette: near-black with a cool undertone, gold as the single
+     brand accent, cyan for "saved/success", red reserved for LIVE. */
+  --color-pitch: #06070b;
+  --color-card: #11131a;
+  --color-card-hover: #171a22;
+  --color-line: #1c1f27;
+  --color-line-strong: #2b3039;
   --color-gold: #ffc72c;
+  --color-gold-bright: #ffe08a;
   --color-gold-dim: #b98f17;
-  --color-silver: #d5dde2;
+  --color-silver: #d9e1e6;
   --color-silver-dim: #8b97a0;
-  --color-bronze: #d99356;
+  --color-bronze: #e09a5c;
   --color-bronze-dim: #9c6435;
   --color-cyan: #5eead4;
   --color-cyan-dim: #2f8f81;
-  --color-flag-red: #ce1126;
-  --color-flag-blue: #0b3d91;
-  --color-acierto: #2fae66;
-  --color-ink: #f5f3ee;
-  --color-ink-dim: #9aa3ab;
-  --color-ink-faint: #5b6268;
+  --color-flag-red: #ff4d5e;
+  --color-flag-blue: #4c8dff;
+  --color-acierto: #3ddc84;
+  --color-ink: #f6f4ef;
+  --color-ink-dim: #a1a9b1;
+  --color-ink-faint: #626a72;
 
   --font-display: var(--font-anton);
   --font-condensed: var(--font-barlow-condensed);
@@ -32,15 +31,13 @@
 
 html {
   color-scheme: dark;
+  scroll-behavior: smooth;
 }
 
 body {
-  background:
-    radial-gradient(900px 460px at 20% -10%, rgba(255, 199, 44, 0.14), transparent 65%),
-    radial-gradient(700px 480px at 100% 20%, rgba(94, 234, 212, 0.07), transparent 60%),
-    var(--color-pitch);
-  background-attachment: fixed;
+  background: var(--color-pitch);
   color: var(--color-ink);
+  overflow-x: hidden;
 }
 
 ::selection {
@@ -51,19 +48,75 @@ body {
 :focus-visible {
   outline: 2px solid var(--color-gold);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
-/* --- Signature element: perforated stadium-ticket card, now in frosted
-   glass — semi-transparent + backdrop-blur instead of a flat fill --- */
+/* ---------- Atmosphere: fixed, slow-moving light behind everything ---------- */
+.bg-aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(1200px 600px at 50% -20%, rgba(255, 199, 44, 0.1), transparent 60%),
+    linear-gradient(180deg, #090a10 0%, var(--color-pitch) 60%);
+}
+.bg-aurora::before,
+.bg-aurora::after {
+  content: "";
+  position: absolute;
+  width: 56vmax;
+  height: 56vmax;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.55;
+  will-change: transform;
+}
+.bg-aurora::before {
+  left: -18vmax;
+  top: -22vmax;
+  background: radial-gradient(circle, rgba(255, 199, 44, 0.22), transparent 62%);
+  animation: drift-a 26s ease-in-out infinite alternate;
+}
+.bg-aurora::after {
+  right: -20vmax;
+  bottom: -26vmax;
+  background: radial-gradient(circle, rgba(94, 234, 212, 0.14), transparent 62%);
+  animation: drift-b 32s ease-in-out infinite alternate;
+}
+/* Fine grid, like a pitch seen from above, barely there. */
+.bg-aurora .grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 70% 55% at 50% 0%, #000 20%, transparent 100%);
+}
+@keyframes drift-a {
+  to {
+    transform: translate(10vmax, 8vmax) scale(1.15);
+  }
+}
+@keyframes drift-b {
+  to {
+    transform: translate(-8vmax, -10vmax) scale(1.1);
+  }
+}
+
+/* ---------- Signature element: perforated ticket, now frosted glass ---------- */
 .ticket-card {
   position: relative;
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 1rem;
-  transition: box-shadow 250ms ease, border-color 250ms ease, transform 250ms ease;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.03) 60%);
+  backdrop-filter: blur(22px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 1.25rem;
+  transition:
+    box-shadow 300ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 300ms ease,
+    transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .ticket-card::before,
 .ticket-card::after {
@@ -76,6 +129,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 9999px;
   transform: translateY(-50%);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.7);
 }
 .ticket-card::before {
   left: -8px;
@@ -84,6 +138,73 @@ body {
   right: -8px;
 }
 
+.ticket-divider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ticket-divider::before,
+.ticket-divider::after {
+  content: "";
+  flex: 1;
+  height: 0;
+  border-top: 2px dashed var(--color-line-strong);
+}
+
+/* Cursor-following highlight used inside tilting cards (a real element,
+   since .ticket-card already spends its pseudo-elements on the holes). */
+.glare {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 300ms ease;
+  background: radial-gradient(
+    260px circle at var(--gx, 50%) var(--gy, 50%),
+    rgba(255, 255, 255, 0.1),
+    transparent 60%
+  );
+}
+.tilt {
+  transform: perspective(1000px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transform-style: preserve-3d;
+  transition: transform 400ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.tilt:hover {
+  transition-duration: 80ms;
+}
+.tilt:hover .glare {
+  opacity: 1;
+}
+
+/* ---------- Motion ---------- */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 560ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 65ms);
+}
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(2deg);
+  }
+}
+.float {
+  animation: float-y 5.5s ease-in-out infinite;
+}
 @keyframes ball-pop {
   0% {
     transform: translateY(0) rotate(0deg) scale(0.5);
@@ -100,79 +221,416 @@ body {
 .ball-pop {
   animation: ball-pop ease-out forwards;
 }
-
-.ticket-divider {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+@keyframes shine {
+  from {
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  to {
+    transform: translateX(230%) skewX(-18deg);
+  }
 }
-.ticket-divider::before,
-.ticket-divider::after {
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 77, 94, 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba(255, 77, 94, 0);
+  }
+}
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-flag-red);
+  animation: pulse-ring 1.4s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .float,
+  .bg-aurora::before,
+  .bg-aurora::after,
+  .live-dot {
+    animation: none !important;
+  }
+  .tilt {
+    transform: none !important;
+  }
+}
+
+/* ---------- 3D football, pure CSS ---------- */
+.ball3d {
+  --s: 96px;
+  position: relative;
+  width: var(--s);
+  height: var(--s);
+  border-radius: 50%;
+  flex-shrink: 0;
+  background:
+    radial-gradient(circle at 48% 44%, transparent 0 56%, rgba(0, 0, 0, 0.18) 100%),
+    radial-gradient(circle at 36% 30%, #ffffff 0 10%, #f0f2f4 11% 28%, #c7ccd2 55%, #585f68 100%);
+  box-shadow:
+    inset calc(var(--s) * -0.14) calc(var(--s) * -0.18) calc(var(--s) * 0.3) rgba(0, 0, 0, 0.6),
+    inset calc(var(--s) * 0.08) calc(var(--s) * 0.1) calc(var(--s) * 0.2) rgba(255, 255, 255, 0.4),
+    0 calc(var(--s) * 0.35) calc(var(--s) * 0.45) calc(var(--s) * -0.22) rgba(0, 0, 0, 0.85);
+}
+/* Pentagon patches: dark spots clipped to the sphere, offset to read as curvature. */
+.ball3d::before {
   content: "";
-  flex: 1;
-  height: 0;
-  border-top: 2px dashed var(--color-line-strong);
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background-image:
+    radial-gradient(circle at 50% 52%, #171a20 0 13%, transparent 14%),
+    radial-gradient(circle at 22% 38%, #171a20 0 9%, transparent 10%),
+    radial-gradient(circle at 78% 36%, #171a20 0 9%, transparent 10%),
+    radial-gradient(circle at 30% 82%, #171a20 0 9%, transparent 10%),
+    radial-gradient(circle at 74% 80%, #171a20 0 9%, transparent 10%),
+    radial-gradient(circle at 56% 10%, #171a20 0 7%, transparent 8%);
+  opacity: 0.9;
+  mask-image: radial-gradient(circle at 50% 50%, #000 62%, transparent 72%);
+}
+/* Specular highlight on top. */
+.ball3d::after {
+  content: "";
+  position: absolute;
+  left: 22%;
+  top: 12%;
+  width: 34%;
+  height: 22%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 70%);
+  filter: blur(1px);
+}
+.ball-shadow {
+  width: 70%;
+  height: 12px;
+  margin: 14px auto 0;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.7), transparent 70%);
+}
+
+/* ---------- Progress ring (conic), used by the "Así va la polla" card ---------- */
+.ring {
+  --p: 0;
+  position: relative;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: conic-gradient(
+    from -90deg,
+    var(--color-gold-bright) 0,
+    var(--color-gold) calc(var(--p) * 1%),
+    rgba(255, 255, 255, 0.07) calc(var(--p) * 1%)
+  );
+  box-shadow:
+    0 0 36px -10px rgba(255, 199, 44, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.ring::before {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #1b1e27, #0b0d12 70%);
+  box-shadow: inset 0 3px 10px rgba(0, 0, 0, 0.7);
+}
+.ring > * {
+  position: relative;
+}
+
+/* Browsers without backdrop-filter (older Android WebViews, some embedded
+   browsers) would otherwise show these surfaces as thin tinted glass over
+   busy content. Solid-enough fills keep text readable there. */
+@supports not (backdrop-filter: blur(1px)) {
+  .glass {
+    background: rgba(12, 13, 19, 0.92);
+  }
+  .card,
+  .ticket-card {
+    background: linear-gradient(145deg, rgba(28, 31, 40, 0.96), rgba(18, 20, 27, 0.96));
+  }
+  .glass-icon {
+    background:
+      radial-gradient(120% 90% at 20% 0%, rgba(255, 255, 255, 0.2), transparent 55%),
+      linear-gradient(160deg, rgba(40, 44, 54, 1), rgba(22, 24, 31, 1));
+  }
+  .seg,
+  .btn-secondary,
+  .icon-btn {
+    background: rgba(24, 27, 35, 0.95);
+  }
 }
 
 @layer components {
-  /* Layered (not the base .ticket-card rule above) so a card-specific
-     override like the "next match" gold highlight — a utility-layer
-     shadow-[...] class — still wins over this default. */
+  /* Layered so a per-card utility (e.g. the "next match" gold ring) wins. */
   .ticket-card {
     box-shadow:
-      0 10px 34px -4px rgba(0, 0, 0, 0.45),
-      0 1px 3px rgba(0, 0, 0, 0.3),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      0 14px 40px -10px rgba(0, 0, 0, 0.6),
+      0 1px 2px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
   .ticket-card:hover {
-    border-color: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.2);
     box-shadow:
-      0 16px 44px -6px rgba(0, 0, 0, 0.55),
-      0 0 40px -8px rgba(255, 199, 44, 0.18),
-      inset 0 1px 0 rgba(255, 255, 255, 0.07);
-    transform: translateY(-2px);
+      0 24px 60px -14px rgba(0, 0, 0, 0.7),
+      0 0 50px -14px rgba(255, 199, 44, 0.25),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+
+  .card {
+    position: relative;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.028) 60%);
+    backdrop-filter: blur(22px) saturate(170%);
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    border-radius: 1.25rem;
+    padding: 1.1rem;
+    box-shadow:
+      0 14px 40px -12px rgba(0, 0, 0, 0.55),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  /* Flat translucent surface for bars, docks and headers. */
+  .glass {
+    background: rgba(10, 11, 16, 0.55);
+    backdrop-filter: blur(26px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  }
+
+  /* ---------- Glass icons (Apple-style squircles) ---------- */
+  .glass-icon {
+    --tint: var(--color-gold);
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 32%;
+    color: var(--tint);
+    background:
+      radial-gradient(120% 90% at 20% 0%, rgba(255, 255, 255, 0.22), transparent 55%),
+      linear-gradient(160deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03) 60%),
+      color-mix(in srgb, var(--tint) 10%, rgba(255, 255, 255, 0.02));
+    backdrop-filter: blur(14px) saturate(170%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.45),
+      inset 0 -2px 3px rgba(0, 0, 0, 0.45),
+      0 10px 22px -10px rgba(0, 0, 0, 0.8),
+      0 0 24px -10px color-mix(in srgb, var(--tint) 70%, transparent);
+    transition: transform 250ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 250ms ease;
+  }
+  /* Gradient rim: a masked ring so it stays crisp at any radius. */
+  .glass-icon::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      155deg,
+      rgba(255, 255, 255, 0.7),
+      rgba(255, 255, 255, 0.08) 38%,
+      color-mix(in srgb, var(--tint) 60%, transparent) 100%
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  /* Top gloss. */
+  .glass-icon::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    border-radius: inherit;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 46%);
+    pointer-events: none;
+  }
+  .glass-icon > svg {
+    position: relative;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 6px color-mix(in srgb, var(--tint) 45%, transparent));
+  }
+  .gi-sm {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 30%;
+  }
+  .gi-lg {
+    width: 3.75rem;
+    height: 3.75rem;
+  }
+  .gi-xl {
+    width: 5rem;
+    height: 5rem;
+  }
+  .gi-gold {
+    --tint: var(--color-gold);
+  }
+  .gi-cyan {
+    --tint: var(--color-cyan);
+  }
+  .gi-red {
+    --tint: var(--color-flag-red);
+  }
+  .gi-blue {
+    --tint: var(--color-flag-blue);
+  }
+  .gi-green {
+    --tint: var(--color-acierto);
+  }
+  .gi-silver {
+    --tint: var(--color-silver);
+  }
+  .gi-bronze {
+    --tint: var(--color-bronze);
+  }
+  .gi-ink {
+    --tint: var(--color-ink);
+  }
+  a:hover > .glass-icon,
+  button:hover > .glass-icon {
+    transform: translateY(-1px) scale(1.04);
   }
 
   .eyebrow {
     font-family: var(--font-condensed);
     font-size: 0.75rem;
-    letter-spacing: 0.15em;
+    letter-spacing: 0.18em;
     color: var(--color-gold);
+    font-weight: 600;
   }
 
-  .card {
+  /* Gold gradient numerals for scores and points. */
+  .num-gold {
+    background: linear-gradient(180deg, var(--color-gold-bright) 0%, var(--color-gold) 55%, #e0a51a 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 2px 10px rgba(255, 199, 44, 0.28));
+  }
+  .num-ink {
+    background: linear-gradient(180deg, #ffffff 0%, #e9e6dd 60%, #b9b6ad 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Small translucent pill for metadata (fecha, state, deltas). */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-family: var(--font-condensed);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-ink-dim);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    white-space: nowrap;
+  }
+  .chip-gold {
+    color: var(--color-gold);
+    background: rgba(255, 199, 44, 0.1);
+    border-color: rgba(255, 199, 44, 0.3);
+  }
+  .chip-red {
+    color: var(--color-flag-red);
+    background: rgba(255, 77, 94, 0.1);
+    border-color: rgba(255, 77, 94, 0.35);
+  }
+  .chip-green {
+    color: var(--color-acierto);
+    background: rgba(61, 220, 132, 0.1);
+    border-color: rgba(61, 220, 132, 0.3);
+  }
+  .chip-cyan {
+    color: var(--color-cyan);
+    background: rgba(94, 234, 212, 0.1);
+    border-color: rgba(94, 234, 212, 0.3);
+  }
+
+  /* Segmented control. */
+  .seg {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 999px;
     background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(20px) saturate(160%);
-    -webkit-backdrop-filter: blur(20px) saturate(160%);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 1rem;
-    padding: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(16px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .seg::-webkit-scrollbar {
+    display: none;
+  }
+  .seg-item {
+    border-radius: 999px;
+    padding: 0.45rem 0.95rem;
+    font-family: var(--font-condensed);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--color-ink-dim);
+    white-space: nowrap;
+    transition:
+      background-color 250ms ease,
+      color 250ms ease,
+      box-shadow 250ms ease,
+      transform 150ms ease;
+  }
+  .seg-item:hover {
+    color: var(--color-ink);
+    background: rgba(255, 255, 255, 0.06);
+  }
+  .seg-item:active {
+    transform: scale(0.97);
+  }
+  @media (max-width: 420px) {
+    .seg-item {
+      padding: 0.42rem 0.66rem;
+      font-size: 0.75rem;
+      letter-spacing: 0.02em;
+    }
+  }
+  .seg-item[data-active="true"] {
+    color: var(--color-pitch);
+    background: linear-gradient(180deg, var(--color-gold-bright), var(--color-gold));
     box-shadow:
-      0 10px 34px -6px rgba(0, 0, 0, 0.42),
-      0 1px 3px rgba(0, 0, 0, 0.25),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  }
-
-  /* Soft, blurred glow for interactive elements that aren't already using
-     .card/.ticket-card/.btn-* (e.g. leaderboard rows) — approaching the
-     element with the cursor should feel like it's catching light. */
-  .hover-glow {
-    transition: background-color 200ms ease, box-shadow 200ms ease;
-  }
-  .hover-glow:hover {
-    background-color: rgba(255, 255, 255, 0.06);
-    box-shadow: 0 0 24px -4px rgba(255, 199, 44, 0.18);
+      0 8px 20px -8px rgba(255, 199, 44, 0.7),
+      inset 0 1px 0 rgba(255, 255, 255, 0.55);
   }
 
   .input-field {
     width: 100%;
-    padding: 0.7rem 0.75rem;
-    border-radius: 0.5rem;
-    border: 1px solid var(--color-line-strong);
-    background: var(--color-pitch);
+    padding: 0.8rem 0.9rem;
+    border-radius: 0.8rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.35);
     color: var(--color-ink);
     font-size: 0.9375rem;
     font-family: var(--font-sans);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5);
+    transition: border-color 200ms ease, box-shadow 200ms ease;
+  }
+  .input-field:focus {
+    outline: none;
+    border-color: rgba(255, 199, 44, 0.6);
+    box-shadow:
+      inset 0 2px 6px rgba(0, 0, 0, 0.5),
+      0 0 0 3px rgba(255, 199, 44, 0.15);
   }
   .input-field::placeholder {
     color: var(--color-ink-faint);
@@ -181,35 +639,63 @@ body {
   .mini-input {
     width: 2.75rem;
     padding: 0.375rem 0.25rem;
-    border-radius: 0.375rem;
-    border: 1px solid var(--color-line-strong);
-    background: var(--color-pitch);
+    border-radius: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.35);
     color: var(--color-ink);
     font-size: 0.875rem;
     text-align: center;
   }
 
+  /* ---------- Buttons: fluid, glossy, press feedback ---------- */
   .btn-primary {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.375rem;
-    background: var(--color-gold);
-    color: var(--color-pitch);
-    border-radius: 0.5rem;
-    padding: 0.7rem 1.1rem;
+    gap: 0.4rem;
+    background: linear-gradient(180deg, var(--color-gold-bright) 0%, var(--color-gold) 55%, #e8ad14 100%);
+    color: #15120a;
+    border-radius: 0.9rem;
+    padding: 0.75rem 1.2rem;
     font-family: var(--font-condensed);
     font-size: 0.9375rem;
     font-weight: 700;
-    letter-spacing: 0.02em;
-    transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+    letter-spacing: 0.03em;
+    box-shadow:
+      0 10px 24px -10px rgba(255, 199, 44, 0.75),
+      inset 0 1px 0 rgba(255, 255, 255, 0.6),
+      inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+    transition:
+      transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      box-shadow 220ms ease,
+      filter 220ms ease;
+  }
+  .btn-primary::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 40%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+    transform: translateX(-130%) skewX(-18deg);
+    z-index: -1;
   }
   .btn-primary:hover:not(:disabled) {
-    background: #ffd35c;
-    box-shadow: 0 0 22px -2px rgba(255, 199, 44, 0.45);
+    transform: translateY(-1px);
+    filter: brightness(1.04);
+    box-shadow:
+      0 16px 32px -12px rgba(255, 199, 44, 0.85),
+      inset 0 1px 0 rgba(255, 255, 255, 0.65),
+      inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+  }
+  .btn-primary:hover:not(:disabled)::after {
+    animation: shine 900ms ease;
   }
   .btn-primary:active:not(:disabled) {
-    transform: scale(0.98);
+    transform: translateY(0) scale(0.97);
   }
   .btn-primary:disabled {
     opacity: 0.45;
@@ -220,56 +706,79 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.375rem;
-    background: rgba(255, 255, 255, 0.04);
+    gap: 0.4rem;
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
     color: var(--color-ink);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 0.625rem;
-    padding: 0.65rem 1.1rem;
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    border-radius: 0.9rem;
+    padding: 0.7rem 1.15rem;
     font-family: var(--font-condensed);
     font-size: 0.875rem;
     font-weight: 600;
-    letter-spacing: 0.02em;
-    transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+    letter-spacing: 0.03em;
+    backdrop-filter: blur(14px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transition:
+      background-color 200ms ease,
+      border-color 200ms ease,
+      box-shadow 220ms ease,
+      transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
   .btn-secondary:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: var(--color-gold-dim);
-    box-shadow: 0 0 18px -4px rgba(255, 199, 44, 0.25);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 199, 44, 0.45);
+    box-shadow:
+      0 10px 24px -12px rgba(255, 199, 44, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    transform: translateY(-1px);
+  }
+  .btn-secondary:active:not(:disabled) {
+    transform: scale(0.97);
   }
   .btn-secondary:disabled {
     opacity: 0.45;
     cursor: not-allowed;
   }
 
-  /* Success/confirmation state — the one place the new cyan accent replaces
-     gold, so "saved" reads as a distinct state rather than just a dimmer
-     primary button. */
   .btn-saved {
     background: rgba(94, 234, 212, 0.1);
     color: var(--color-cyan);
-    border: 1px solid rgba(94, 234, 212, 0.35);
-    box-shadow: none;
+    border: 1px solid rgba(94, 234, 212, 0.4);
+    box-shadow: 0 0 24px -8px rgba(94, 234, 212, 0.5);
   }
 
   .icon-btn {
-    width: 2.125rem;
-    height: 2.125rem;
-    border-radius: 0.625rem;
+    width: 2.375rem;
+    height: 2.375rem;
+    border-radius: 0.8rem;
     border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.04);
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
     color: var(--color-ink-dim);
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease, transform 100ms ease;
+    backdrop-filter: blur(14px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transition:
+      background-color 180ms ease,
+      color 180ms ease,
+      box-shadow 200ms ease,
+      transform 120ms ease;
   }
   .icon-btn:hover {
-    background: rgba(255, 255, 255, 0.09);
+    background: rgba(255, 255, 255, 0.1);
     color: var(--color-ink);
-    box-shadow: 0 0 16px -4px rgba(255, 199, 44, 0.3);
+    box-shadow: 0 0 18px -6px rgba(255, 199, 44, 0.45);
   }
   .icon-btn:active {
-    transform: scale(0.92);
+    transform: scale(0.9);
+  }
+
+  .hover-glow {
+    transition: background-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+  }
+  .hover-glow:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    box-shadow: 0 0 28px -6px rgba(255, 199, 44, 0.2);
   }
 }

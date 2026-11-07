@@ -1,10 +1,37 @@
-import { Star, Target, CircleCheck, Circle } from "lucide-react";
+import { Star, Target, CircleCheck, Circle, Scale } from "lucide-react";
 import { getClubLeaderboard } from "@/lib/leaderboard-service";
 import { getClubMemberStatsMap } from "@/lib/player-stats-service";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { EmptyNote } from "@/components/ui/EmptyNote";
+import { GlassIcon, type GlassTint } from "@/components/ui/GlassIcon";
+import { Podium } from "@/components/leaderboard/Podium";
 import { LeaderboardList } from "@/components/leaderboard/LeaderboardList";
 import { LiveRefresher } from "@/components/live/LiveRefresher";
+
+const RULES: Array<{ icon: typeof Star; tint: GlassTint; title: string; desc: string; pts: string }> = [
+  { icon: Target, tint: "red", title: "Marcador exacto", desc: "Aciertas el marcador tal cual.", pts: "5" },
+  {
+    icon: CircleCheck,
+    tint: "blue",
+    title: "Ganador o empate",
+    desc: "Aciertas quién gana o que empatan. Se suma con gol acertado.",
+    pts: "2",
+  },
+  {
+    icon: Circle,
+    tint: "green",
+    title: "Gol acertado",
+    desc: "Aciertas los goles de uno de los dos equipos. Se suma con ganador.",
+    pts: "1",
+  },
+  {
+    icon: Star,
+    tint: "gold",
+    title: "Predicción única",
+    desc: "Nadie más del club acertó el exacto. Se suma a los 5.",
+    pts: "+2",
+  },
+];
 
 export default async function ClasificacionPage({
   params,
@@ -12,104 +39,84 @@ export default async function ClasificacionPage({
   params: Promise<{ clubId: string }>;
 }) {
   const { clubId } = await params;
-  const [{ entries: leaderboard, hasLiveMatch }, statsByUserMap] = await Promise.all([
+  const [{ entries: leaderboard, hasLiveMatch, lastMatch }, statsByUserMap] = await Promise.all([
     getClubLeaderboard(clubId),
     getClubMemberStatsMap(clubId),
   ]);
   const statsByUser = Object.fromEntries(statsByUserMap);
 
   return (
-    <div>
+    <div className="lg:grid lg:grid-cols-[1fr_340px] lg:items-start lg:gap-8">
       <LiveRefresher active={hasLiveMatch} />
-      <SectionLabel>Tabla de posiciones</SectionLabel>
-      <p className="mb-2.5 text-xs text-ink-faint">Toca un jugador para ver el detalle de sus puntos.</p>
-      {hasLiveMatch && (
-        <div className="mb-2.5 flex items-center gap-1.5 text-[12px] font-semibold text-flag-red">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-flag-red opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-flag-red" />
-          </span>
-          Puntaje en vivo — puede cambiar mientras el partido continúa
-        </div>
-      )}
-      <div className="card">
+
+      <div>
+        <SectionLabel
+          hint={
+            lastMatch
+              ? `últ.: ${lastMatch.homeTeam} ${lastMatch.homeScore}-${lastMatch.awayScore} ${lastMatch.awayTeam}`
+              : undefined
+          }
+        >
+          Tabla de posiciones
+        </SectionLabel>
+
+        {hasLiveMatch && (
+          <div className="mb-3 flex items-center gap-2 text-[12px] font-semibold text-flag-red">
+            <span className="live-dot" />
+            Puntaje en vivo, puede cambiar mientras el partido continúa
+          </div>
+        )}
+
         {leaderboard.length > 0 ? (
-          <LeaderboardList leaderboard={leaderboard} statsByUser={statsByUser} />
+          <>
+            <Podium entries={leaderboard} />
+            <p className="mb-2.5 text-xs text-ink-faint">
+              Toca un jugador para ver de dónde salen sus puntos. &quot;Últ.&quot; es lo que sumó en el
+              último partido jugado.
+            </p>
+            <LeaderboardList leaderboard={leaderboard} statsByUser={statsByUser} />
+          </>
         ) : (
-          <EmptyNote>
+          <EmptyNote icon={Star}>
             Todavía nadie tiene puntos. Se suman cuando se cargan resultados finales.
           </EmptyNote>
         )}
       </div>
-      <SectionLabel className="mt-7">Reglas de puntaje</SectionLabel>
-      <div className="card">
-        <div className="flex items-center justify-between gap-3 border-b border-line py-2.5">
-          <div className="flex items-center gap-2.5">
-            <Target size={16} className="shrink-0 text-flag-red" />
-            <div>
-              <div className="text-[13px] font-semibold">Marcador exacto</div>
-              <div className="text-xs text-ink-dim">Aciertas el marcador exacto del partido.</div>
-            </div>
-          </div>
-          <div className="font-display text-xl text-gold">5</div>
-        </div>
-        <div className="flex items-center justify-between gap-3 border-b border-line py-2.5">
-          <div className="flex items-center gap-2.5">
-            <CircleCheck size={16} className="shrink-0 text-flag-blue" />
-            <div>
-              <div className="text-[13px] font-semibold">Ganador o empate acertado</div>
-              <div className="text-xs text-ink-dim">
-                No aciertas el marcador exacto, pero sí quién gana o si es empate. Se puede
-                combinar con gol acertado.
-              </div>
-            </div>
-          </div>
-          <div className="font-display text-xl text-gold">2</div>
-        </div>
-        <div className="flex items-center justify-between gap-3 border-b border-line py-2.5">
-          <div className="flex items-center gap-2.5">
-            <Circle size={16} className="shrink-0 text-acierto" />
-            <div>
-              <div className="text-[13px] font-semibold">Gol acertado</div>
-              <div className="text-xs text-ink-dim">
-                No aciertas el marcador exacto, pero sí el número de goles de uno de los dos
-                equipos. Se puede combinar con ganador o empate acertado.
-              </div>
-            </div>
-          </div>
-          <div className="font-display text-xl text-gold">1</div>
-        </div>
-        <div className="flex items-center justify-between gap-3 py-2.5">
-          <div className="flex items-center gap-2.5">
-            <Star size={16} className="shrink-0 fill-gold text-gold" />
-            <div>
-              <div className="text-[13px] font-semibold">Predicción única</div>
-              <div className="text-xs text-ink-dim">
-                Fuiste el único del club en acertar el marcador exacto de ese partido. Es el único
-                caso donde los puntos se acumulan: se suman a los 5 de marcador exacto.
-              </div>
-            </div>
-          </div>
-          <div className="font-display text-xl text-gold">+2</div>
-        </div>
-      </div>
-      <p className="mt-2.5 text-xs leading-relaxed text-ink-faint">
-        Ganador/empate y gol acertado se pueden combinar en un mismo partido: por ejemplo, si el
-        resultado real es 2-1 y predices 2-0, ganas los 2 puntos por acertar el ganador más 1
-        punto por acertar el gol del local, +3 en total. Marcador exacto es aparte: si aciertas el
-        marcador exacto no se suman los otros dos, solo los 5 puntos (más los 2 de predicción
-        única si aplica). Las predicciones se cierran 10 minutos antes del pitazo inicial; desde
-        ese momento puedes ver las del resto del club tocando &quot;Predicciones jugadores&quot;
-        en cada partido, para que nadie se copie antes.
-      </p>
 
-      <SectionLabel className="mt-7">Empates</SectionLabel>
-      <div className="card">
-        <p className="text-xs leading-relaxed text-ink-dim">
-          Si dos o más jugadores tienen los mismos puntos, comparten el puesto. Por ejemplo: dos en
-          primer lugar y el siguiente en tercero, o uno en primer lugar y dos en segundo.
+      <aside className="mt-8 lg:sticky lg:top-24 lg:mt-0">
+        <SectionLabel>Cómo se puntúa</SectionLabel>
+        <div className="card flex flex-col gap-1 p-2">
+          {RULES.map((r, i) => (
+            <div
+              key={r.title}
+              className="rise flex items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-white/[0.04]"
+              style={{ "--i": i } as React.CSSProperties}
+            >
+              <GlassIcon icon={r.icon} tint={r.tint} size="sm" />
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-semibold">{r.title}</div>
+                <div className="text-[11.5px] leading-snug text-ink-dim">{r.desc}</div>
+              </div>
+              <div className="num-gold font-display text-2xl">{r.pts}</div>
+            </div>
+          ))}
+        </div>
+        <p className="mt-2.5 px-1 text-[11.5px] leading-relaxed text-ink-faint">
+          Ejemplo: el partido queda 2-1 y predices 2-0. Ganas 2 por el ganador y 1 por el gol del
+          local: 3 en total. El exacto no se suma con los otros, son 5 (más 2 si fuiste el único).
+          Las predicciones cierran 10 minutos antes del pitazo; desde ahí puedes ver las de los
+          demás en cada partido.
         </p>
-      </div>
+
+        <SectionLabel className="mt-6">Empates</SectionLabel>
+        <div className="card flex items-start gap-3">
+          <GlassIcon icon={Scale} tint="ink" size="sm" />
+          <p className="text-[12.5px] leading-relaxed text-ink-dim">
+            Con los mismos puntos se comparte el puesto: dos en primer lugar y el siguiente en
+            tercero, o uno en primer lugar y dos en segundo.
+          </p>
+        </div>
+      </aside>
     </div>
   );
 }
