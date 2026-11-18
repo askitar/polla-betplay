@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { MatchStatus } from "@/app/generated/prisma/client";
+import { LEAGUE_SEASON_KEY } from "@/lib/playoffs";
 
 const VALID_STATUSES: MatchStatus[] = ["SCHEDULED", "LIVE", "FINISHED", "POSTPONED", "CANCELLED"];
 
@@ -75,7 +76,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Equipo no encontrado." }, { status: 400 });
     }
     const existing = await prisma.match.findFirst({
-      where: { homeTeamId: homeTeam.id, awayTeamId: awayTeam.id },
+      // League only: playoff games repeat league pairs, use externalFixtureId for those.
+      where: { homeTeamId: homeTeam.id, awayTeamId: awayTeam.id, jornada: { season: { externalId: LEAGUE_SEASON_KEY } } },
       orderBy: { kickoff: "desc" },
     });
     if (!existing) {

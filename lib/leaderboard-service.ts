@@ -1,6 +1,6 @@
 import { computeClubMatchBreakdown } from "@/lib/scoring";
 import { rankEntries } from "@/lib/ranking";
-import { getAllMatches, getClubMemberships, getClubPredictions } from "@/lib/club-data";
+import { getClubPredictions, getTournamentMatches, getTournamentMembers, type Torneo } from "@/lib/club-data";
 
 export type LeaderboardEntry = {
   userId: string;
@@ -22,7 +22,7 @@ export type LastScoredMatch = {
   isLive: boolean;
 };
 
-export async function getClubLeaderboard(clubId: string): Promise<{
+export async function getClubLeaderboard(clubId: string, torneo: Torneo = "liga"): Promise<{
   entries: LeaderboardEntry[];
   hasLiveMatch: boolean;
   lastMatch: LastScoredMatch | null;
@@ -31,8 +31,8 @@ export async function getClubLeaderboard(clubId: string): Promise<{
   // so rendering a page that shows both the table and the fixtures reads
   // each of these once rather than twice.
   const [memberships, allMatches, predictions] = await Promise.all([
-    getClubMemberships(clubId),
-    getAllMatches(),
+    getTournamentMembers(clubId, torneo),
+    getTournamentMatches(torneo),
     getClubPredictions(clubId),
   ]);
 

@@ -10,6 +10,10 @@ import { JornadaSwitcher } from "@/components/match/JornadaSwitcher";
 import { PartidosSidebar } from "@/components/match/PartidosSidebar";
 import { LiveRefresher } from "@/components/live/LiveRefresher";
 import { ViewSwitcher, CRONOGRAMA_VIEWS, type CronogramaView } from "@/components/match/ViewSwitcher";
+import { TorneoSwitch, resolveTorneo } from "@/components/playoffs/TorneoSwitch";
+import { getPlayoffState } from "@/lib/playoff-service";
+import { FINAL_FIRST_JORNADA, playoffStageLabel } from "@/lib/playoffs";
+import type { MatchView } from "@/lib/matches-service";
 
 // Full calendar. "Por fecha" browses one fecha at a time, same as before;
 // the other views (Jugados/Por jugar/Aplazados/En vivo) cut across the
@@ -22,23 +26,28 @@ export default async function CronogramaPage({
   searchParams,
 }: {
   params: Promise<{ clubId: string }>;
-  searchParams: Promise<{ fecha?: string; view?: string }>;
+  searchParams: Promise<{ fecha?: string; view?: string; torneo?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/signin");
 
   const { clubId } = await params;
-  const { fecha, view: viewParam } = await searchParams;
+  const { fecha, view: viewParam, torneo: torneoParam } = await searchParams;
+  const playoffs = await getPlayoffState(clubId, session.user.id);
+  const torneo = resolveTorneo(playoffs.active, torneoParam);
+  const isPlayoffs = torneo === "cuadrangulares";
+  const torneoQuery = playoffs.active && torneo === "liga" ? "torneo=liga" : "";
+  const canPredict = !isPlayoffs || playoffs.decision?.accepted === true;
   const view: CronogramaView = CRONOGRAMA_VIEWS.some((v) => v.id === viewParam)
     ? (viewParam as CronogramaView)
     : "fecha";
 
   const [allMatches, membership, { entries: leaderboard, hasLiveMatch }, me] = await Promise.all([
-    getClubMatchesView(clubId, session.user.id),
+    getClubMatchesView(clubId, session.user.id, new Date(), torneo),
     prisma.membership.findUnique({
       where: { userId_clubId: { userId: session.user.id, clubId } },
     }),
-    getClubLeaderboard(clubId),
+    getClubLeaderboard(clubId, torneo),
     prisma.user.findUnique({
       where: { id: session.user.id },
       select: { favoriteTeam: { select: { name: true } } },
@@ -73,23 +82,40 @@ export default async function CronogramaPage({
   const nextMatch = allMatches.find((m) => m.isNext);
   const topThree = leaderboard.slice(0, 3);
 
-  const cardProps = { clubId, isAdmin, favoriteTeamName, showJornada: true as const };
+  const cardProps = { clubId, isAdmin, favoriteTeamName, showJornada: true as const, canPredict };
+  const stage = (m: MatchView) => (isPlayoffs ? playoffStageLabel(m.jornadaNumber, m.groupName) : null);
+  const byGroupThenKickoff = (a: MatchView, b: MatchView) =>
+    (a.groupName ?? "").localeCompare(b.groupName ?? "") || a.kickoff.getTime() - b.kickoff.getTime();
+  if (isPlayoffs) upcoming.sort(byGroupThenKickoff);
+  const currentLabel =
+    isPlayoffs && currentJornada >= FINAL_FIRST_JORNADA
+      ? currentJornada === FINAL_FIRST_JORNADA
+        ? "Final ida"
+        : "Final vuelta"
+      : null;
 
   return (
     <div className="lg:grid lg:grid-cols-[1fr_320px] lg:items-start lg:gap-8">
       <LiveRefresher active={hasLiveMatch} />
       <div>
-        <ViewSwitcher clubId={clubId} current={view} />
+        {playoffs.active && <TorneoSwitch basePath={`/clubs/${clubId}/cronograma`} current={torneo} />}
+        <ViewSwitcher clubId={clubId} current={view} torneoQuery={torneoQuery} />
 
         {view === "fecha" && (
           <>
-            <JornadaSwitcher clubId={clubId} jornadas={jornadas} current={currentJornada} />
+            <JornadaSwitcher
+              clubId={clubId}
+              jornadas={jornadas}
+              current={currentJornada}
+              extraQuery={torneoQuery ? `&${torneoQuery}` : ""}
+              currentLabel={currentLabel}
+            />
 
             {upcoming.length > 0 && (
               <>
                 <SectionLabel>Por jugar</SectionLabel>
                 {upcoming.map((m) => (
-                  <MatchCard key={m.id} match={m} {...cardProps} />
+                  <MatchCard key={m.id} match={m} stageLabel={stage(m)} {...cardProps} />
                 ))}
               </>
             )}
@@ -98,7 +124,7 @@ export default async function CronogramaPage({
               <>
                 <SectionLabel className="mt-2">Finalizados</SectionLabel>
                 {finishedInFecha.map((m) => (
-                  <MatchCard key={m.id} match={m} {...cardProps} />
+                  <MatchCard key={m.id} match={m} stageLabel={stage(m)} {...cardProps} />
                 ))}
               </>
             )}
@@ -107,7 +133,7 @@ export default async function CronogramaPage({
               <>
                 <SectionLabel className="mt-2">Aplazados</SectionLabel>
                 {postponedInFecha.map((m) => (
-                  <MatchCard key={m.id} match={m} {...cardProps} />
+                  <MatchCard key={m.id} match={m} stageLabel={stage(m)} {...cardProps} />
                 ))}
               </>
             )}
@@ -120,7 +146,7 @@ export default async function CronogramaPage({
           <>
             <SectionLabel>Jugados</SectionLabel>
             {allJugados.length > 0 ? (
-              allJugados.map((m) => <MatchCard key={m.id} match={m} {...cardProps} />)
+              allJugados.map((m) => <MatchCard key={m.id} match={m} stageLabel={stage(m)} {...cardProps} />)
             ) : (
               <EmptyNote>Todavía no se ha jugado ningún partido.</EmptyNote>
             )}
@@ -131,7 +157,7 @@ export default async function CronogramaPage({
           <>
             <SectionLabel>Por jugar</SectionLabel>
             {allNoJugados.length > 0 ? (
-              allNoJugados.map((m) => <MatchCard key={m.id} match={m} {...cardProps} />)
+              allNoJugados.map((m) => <MatchCard key={m.id} match={m} stageLabel={stage(m)} {...cardProps} />)
             ) : (
               <EmptyNote>No hay partidos programados por jugar.</EmptyNote>
             )}
@@ -142,7 +168,7 @@ export default async function CronogramaPage({
           <>
             <SectionLabel>Aplazados</SectionLabel>
             {allAplazados.length > 0 ? (
-              allAplazados.map((m) => <MatchCard key={m.id} match={m} {...cardProps} />)
+              allAplazados.map((m) => <MatchCard key={m.id} match={m} stageLabel={stage(m)} {...cardProps} />)
             ) : (
               <EmptyNote>No hay partidos aplazados en este momento.</EmptyNote>
             )}
@@ -153,7 +179,7 @@ export default async function CronogramaPage({
           <>
             <SectionLabel>En vivo</SectionLabel>
             {allEnVivo.length > 0 ? (
-              allEnVivo.map((m) => <MatchCard key={m.id} match={m} {...cardProps} />)
+              allEnVivo.map((m) => <MatchCard key={m.id} match={m} stageLabel={stage(m)} {...cardProps} />)
             ) : (
               <EmptyNote>No hay ningún partido en vivo en este momento.</EmptyNote>
             )}

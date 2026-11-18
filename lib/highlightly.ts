@@ -3,6 +3,20 @@ import type { ManualMismatchRow } from "@/lib/email-templates";
 import { notifyStuckMatches, notifyManualMismatches } from "@/lib/alerts";
 import { canHaveFinalResult } from "@/lib/match-time";
 import { isRegularSeasonRound, officialResultWins } from "@/lib/season";
+import {
+  FINAL_FIRST_JORNADA,
+  GROUP_FECHAS,
+  LEAGUE_SEASON_KEY,
+  PLAYOFF_SEASON_KEY,
+  computeTable,
+  inferGroups,
+  parsePlayoffRound,
+} from "@/lib/playoffs";
+
+// League matches are matched by team pair, which is only unambiguous inside
+// the league season: the same pairs meet again in the cuadrangulares (twice,
+// home and away). Every league lookup is scoped with this.
+const LEAGUE_ONLY = { jornada: { season: { externalId: LEAGUE_SEASON_KEY } } };
 
 const API_BASE = "https://soccer.highlightly.net";
 
@@ -162,7 +176,16 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
     status: MatchStatus;
   }> = [];
 
+  const playoffFixtures: HighlightlyMatch[] = [];
+
   for (const f of fixtures) {
+    // Cuadrangulares and the final are tracked by fixture id, not team pair
+    // (see upsertPlayoffFixtures), so they take their own path.
+    if (parsePlayoffRound(f.round)) {
+      playoffFixtures.push(f);
+      continue;
+    }
+
     // Highlightly has occasionally returned a stale Apertura (2026-I)
     // fixture for a team pair under a Clausura-season date query — caught
     // live when Fortaleza vs Cúcuta got marked FINISHED with January's
@@ -200,12 +223,12 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
   // Note this deliberately keys off Highlightly's own kickoff time, never
   // our stored one, so a wrong kickoff on our side can't hide a fixture.
   const LOOKAHEAD_MS = 2 * 60 * 60_000;
-  const needsDb = actionable.some(
-    ({ fixture, status }) =>
-      status !== "SCHEDULED" || new Date(fixture.date).getTime() - now.getTime() < LOOKAHEAD_MS,
-  );
+  const worthALook = (f: HighlightlyMatch, status: MatchStatus | undefined) =>
+    status !== "SCHEDULED" || new Date(f.date).getTime() - now.getTime() < LOOKAHEAD_MS;
+  const leagueNeedsDb = actionable.some(({ fixture, status }) => worthALook(fixture, status));
+  const playoffNeedsDb = playoffFixtures.some((f) => worthALook(f, STATUS_MAP[f.state.description]));
 
-  if (actionable.length === 0 || !needsDb) {
+  if (!leagueNeedsDb && !playoffNeedsDb) {
     return {
       total: fixtures.length,
       updated: 0,
@@ -225,20 +248,22 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
     names.add(a.homeName);
     names.add(a.awayName);
   }
-  const teams = await prisma.team.findMany({ where: { name: { in: [...names] } } });
+  const teams = leagueNeedsDb ? await prisma.team.findMany({ where: { name: { in: [...names] } } }) : [];
   const teamIdByName = new Map(teams.map((t) => [t.name, t.id]));
 
   const teamIds = teams.map((t) => t.id);
-  const candidates = await prisma.match.findMany({
-    where: { homeTeamId: { in: teamIds }, awayTeamId: { in: teamIds } },
-  });
+  const candidates = leagueNeedsDb
+    ? await prisma.match.findMany({
+        where: { homeTeamId: { in: teamIds }, awayTeamId: { in: teamIds }, ...LEAGUE_ONLY },
+      })
+    : [];
   const matchByPair = new Map(candidates.map((m) => [`${m.homeTeamId}|${m.awayTeamId}`, m]));
 
   let updated = 0;
   let skippedManual = 0;
   let skippedNoMatch = 0;
 
-  for (const { fixture: f, homeName, awayName, status } of actionable) {
+  for (const { fixture: f, homeName, awayName, status } of leagueNeedsDb ? actionable : []) {
     const homeTeamId = teamIdByName.get(homeName);
     const awayTeamId = teamIdByName.get(awayName);
     if (!homeTeamId || !awayTeamId) {
@@ -289,6 +314,8 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
     updated++;
   }
 
+  const playoffs = playoffNeedsDb ? await upsertPlayoffFixtures(playoffFixtures, now) : null;
+
   // Checked last, after this tick's own updates have already landed, so a
   // match this very run just correctly flipped to FINISHED never triggers a
   // false alarm — only a match that is STILL LIVE despite everything above
@@ -324,6 +351,7 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
     skippedUnknownStatus,
     skippedWrongStage,
     touchedDb: true,
+    playoffs,
     stuckMatches: stale.length,
     stuckAlert,
   };
@@ -355,29 +383,12 @@ export async function reconcileSeason(season = "2026") {
   const leagueId = process.env.HIGHLIGHTLY_LEAGUE_ID;
   if (!leagueId) throw new Error("Falta configurar HIGHLIGHTLY_LEAGUE_ID.");
 
-  const fixtures: HighlightlyMatch[] = [];
-  let offset = 0;
-  let totalCount: number | null = null;
-  // Hard page cap so a malformed pagination response can never spin here.
-  for (let page = 0; page < 20; page++) {
-    const data = await fetchHighlightly("matches", {
-      leagueId,
-      season,
-      offset: String(offset),
-      limit: "100",
-    });
-    const batch = (data.data ?? []) as HighlightlyMatch[];
-    fixtures.push(...batch);
-    totalCount = data.pagination?.totalCount ?? fixtures.length;
-    offset += 100;
-    if (batch.length === 0 || fixtures.length >= (totalCount ?? 0)) break;
-  }
-
+  const fixtures = await fetchSeasonFixtures(leagueId, season);
   const clausura = fixtures.filter((f) => isRegularSeasonRound(f.round));
 
   const teams = await prisma.team.findMany();
   const teamIdByName = new Map(teams.map((t) => [t.name, t.id]));
-  const matches = await prisma.match.findMany({ include: { jornada: true } });
+  const matches = await prisma.match.findMany({ where: LEAGUE_ONLY, include: { jornada: true } });
   const byPair = new Map(matches.map((m) => [`${m.homeTeamId}|${m.awayTeamId}`, m]));
 
   let checked = 0;
@@ -532,6 +543,11 @@ export async function reconcileSeason(season = "2026") {
     );
   }
 
+  // Same pass also creates and corrects the cuadrangulares, so new fechas
+  // (Dimayor publishes them a few days ahead) show up without extra API calls.
+  const playoffs = await upsertPlayoffFixtures(fixtures, new Date());
+  manualMismatches.push(...playoffs.manualMismatches);
+
   const manualMismatchAlert = await notifyManualMismatches(manualMismatches).catch(() => null);
 
   return {
@@ -548,5 +564,270 @@ export async function reconcileSeason(season = "2026") {
     changes,
     manualMismatches,
     manualMismatchAlert,
+    playoffs,
   };
+}
+
+/** Every fixture of a Highlightly season, 100 per page (about 5 calls). */
+async function fetchSeasonFixtures(leagueId: string, season: string) {
+  const fixtures: HighlightlyMatch[] = [];
+  let offset = 0;
+  let totalCount: number | null = null;
+  // Hard page cap so a malformed pagination response can never spin here.
+  for (let page = 0; page < 20; page++) {
+    const data = await fetchHighlightly("matches", {
+      leagueId,
+      season,
+      offset: String(offset),
+      limit: "100",
+    });
+    const batch = (data.data ?? []) as HighlightlyMatch[];
+    fixtures.push(...batch);
+    totalCount = data.pagination?.totalCount ?? fixtures.length;
+    offset += 100;
+    if (batch.length === 0 || fixtures.length >= (totalCount ?? 0)) break;
+  }
+  return fixtures;
+}
+
+/** Manual trigger: pull the season and create/correct every playoff match. */
+export async function syncPlayoffs(season = "2026") {
+  const leagueId = process.env.HIGHLIGHTLY_LEAGUE_ID;
+  if (!leagueId) throw new Error("Falta configurar HIGHLIGHTLY_LEAGUE_ID.");
+  const fixtures = await fetchSeasonFixtures(leagueId, season);
+  return upsertPlayoffFixtures(fixtures, new Date());
+}
+
+const PLAYOFF_JORNADA_LABELS: Record<number, string> = {
+  [FINAL_FIRST_JORNADA]: "Final · ida",
+  [FINAL_FIRST_JORNADA + 1]: "Final · vuelta",
+};
+
+type PlayoffFixture = { f: HighlightlyMatch; round: NonNullable<ReturnType<typeof parsePlayoffRound>> };
+
+/**
+ * Creates and keeps up to date the cuadrangulares and the final from
+ * Highlightly. Unlike the league (seeded by hand, matched by team pair),
+ * these are created here and matched by Highlightly's fixture id: the same
+ * pairs play twice in a group and already met in the league, so a pair says
+ * nothing about which game it is.
+ *
+ * Accepts any list of fixtures (the whole season from the daily
+ * reconciliation, or just today's from the live sync) and ignores the ones
+ * that are not playoff rounds. Same MANUAL rules as the league: a manual
+ * score stands until the official result is final, and an impossible one
+ * (a "final" score before the game could have ended) is reverted.
+ */
+async function upsertPlayoffFixtures(all: HighlightlyMatch[], now: Date) {
+  const fixtures = all
+    .map((f) => ({ f, round: parsePlayoffRound(f.round) }))
+    .filter((x): x is PlayoffFixture => !!x.round);
+
+  const result = {
+    seen: fixtures.length,
+    created: 0,
+    updated: 0,
+    skippedManual: 0,
+    skippedUnmapped: 0,
+    revertedImpossible: 0,
+    groupsKnown: false,
+    changes: [] as string[],
+    manualMismatches: [] as ManualMismatchRow[],
+  };
+  if (fixtures.length === 0) return result;
+
+  const season =
+    (await prisma.season.findUnique({ where: { externalId: PLAYOFF_SEASON_KEY } })) ??
+    (await prisma.season.create({
+      data: { name: "Cuadrangulares 2026-II", externalId: PLAYOFF_SEASON_KEY, isActive: true },
+    }));
+
+  let jornadas = await prisma.jornada.findMany({ where: { seasonId: season.id } });
+  if (jornadas.length < FINAL_FIRST_JORNADA + 1) {
+    await prisma.jornada.createMany({
+      data: Array.from({ length: FINAL_FIRST_JORNADA + 1 }, (_, i) => i + 1)
+        .filter((n) => !jornadas.some((j) => j.number === n))
+        .map((n) => ({ seasonId: season.id, number: n, label: PLAYOFF_JORNADA_LABELS[n] ?? `Fecha ${n}` })),
+      skipDuplicates: true,
+    });
+    jornadas = await prisma.jornada.findMany({ where: { seasonId: season.id } });
+  }
+  const jornadaIdByNumber = new Map(jornadas.map((j) => [j.number, j.id]));
+  const jornadaNumberById = new Map(jornadas.map((j) => [j.id, j.number]));
+
+  const [teams, existingMatches] = await Promise.all([
+    prisma.team.findMany(),
+    prisma.match.findMany({
+      where: { jornada: { seasonId: season.id } },
+      include: { homeTeam: true, awayTeam: true },
+    }),
+  ]);
+  const teamIdByName = new Map(teams.map((t) => [t.name, t.id]));
+  const byExternalId = new Map(existingMatches.map((m) => [m.externalFixtureId, m]));
+  const isGroupJornada = (jornadaId: string) => (jornadaNumberById.get(jornadaId) ?? 0) <= GROUP_FECHAS;
+
+  // Groups, from every group pairing we know of (stored plus incoming).
+  const pairs = new Map<string, [string, string]>();
+  for (const m of existingMatches) {
+    if (isGroupJornada(m.jornadaId)) pairs.set(m.externalFixtureId ?? m.id, [m.homeTeam.name, m.awayTeam.name]);
+  }
+  for (const { f, round } of fixtures) {
+    const h = TEAM_ID_TO_NAME[f.homeTeam.id];
+    const a = TEAM_ID_TO_NAME[f.awayTeam.id];
+    if (round.kind === "group" && h && a) pairs.set(String(f.id), [h, a]);
+  }
+  const needsGroups =
+    existingMatches.some((m) => isGroupJornada(m.jornadaId) && !m.groupName) ||
+    fixtures.some(({ f, round }) => round.kind === "group" && !byExternalId.get(String(f.id))?.groupName);
+  let groups: Map<string, "A" | "B"> | null = null;
+  if (needsGroups) {
+    // Seeded by the final league table: its leader heads group A.
+    const league = await prisma.match.findMany({
+      where: { ...LEAGUE_ONLY, status: "FINISHED" },
+      include: { homeTeam: true, awayTeam: true },
+    });
+    const teamsInPlayoffs = [...new Set([...pairs.values()].flat())];
+    const table = computeTable(
+      teamsInPlayoffs,
+      league.map((m) => ({
+        home: m.homeTeam.name,
+        away: m.awayTeam.name,
+        homeScore: m.homeScore,
+        awayScore: m.awayScore,
+        status: m.status,
+      })),
+    );
+    groups = inferGroups([...pairs.values()], table.map((r) => r.team));
+  }
+  result.groupsKnown = !needsGroups || groups !== null;
+
+  // Final legs by date: the earlier one is the ida.
+  const finals = new Map<string, number>();
+  for (const m of existingMatches) {
+    if (!isGroupJornada(m.jornadaId) && m.externalFixtureId) finals.set(m.externalFixtureId, m.kickoff.getTime());
+  }
+  for (const { f, round } of fixtures) if (round.kind === "final") finals.set(String(f.id), new Date(f.date).getTime());
+  const finalOrder = [...finals.entries()].sort((a, b) => a[1] - b[1]).map(([id]) => id);
+
+  for (const { f, round } of fixtures) {
+    const homeName = TEAM_ID_TO_NAME[f.homeTeam.id];
+    const awayName = TEAM_ID_TO_NAME[f.awayTeam.id];
+    const homeTeamId = homeName ? teamIdByName.get(homeName) : undefined;
+    const awayTeamId = awayName ? teamIdByName.get(awayName) : undefined;
+    const status = STATUS_MAP[f.state.description];
+    if (!homeName || !awayName || !homeTeamId || !awayTeamId || !status) {
+      result.skippedUnmapped++;
+      continue;
+    }
+
+    const extId = String(f.id);
+    const jornadaNumber =
+      round.kind === "group"
+        ? round.fecha
+        : FINAL_FIRST_JORNADA + Math.min(1, Math.max(0, finalOrder.indexOf(extId)));
+    const jornadaId = jornadaIdByNumber.get(jornadaNumber)!;
+    const existing = byExternalId.get(extId);
+    const groupName = round.kind === "group" ? (groups?.get(homeName) ?? existing?.groupName ?? null) : null;
+
+    const kickoff = new Date(f.date);
+    const [homeScore, awayScore] = parseScore(f.state.score.current);
+    const carries = (status === "LIVE" || status === "FINISHED") && homeScore !== null;
+    const resultData = carries
+      ? {
+          homeScore,
+          awayScore,
+          resultSource: "API" as const,
+          liveMinute: status === "LIVE" ? f.state.clock : null,
+          livePeriod: status === "LIVE" ? f.state.description : null,
+        }
+      : { liveMinute: null, livePeriod: null };
+
+    if (!existing) {
+      await prisma.match.create({
+        data: {
+          jornadaId,
+          homeTeamId,
+          awayTeamId,
+          kickoff,
+          status,
+          externalFixtureId: extId,
+          groupName,
+          lastSyncedAt: now,
+          ...resultData,
+        },
+      });
+      result.created++;
+      result.changes.push(
+        `nuevo: ${homeName} vs ${awayName} (fecha ${jornadaNumber}${groupName ? `, grupo ${groupName}` : ""})`,
+      );
+      continue;
+    }
+
+    const placement = { jornadaId, groupName, kickoff };
+    const placementChanged =
+      existing.jornadaId !== jornadaId ||
+      existing.groupName !== groupName ||
+      existing.kickoff.getTime() !== kickoff.getTime();
+
+    if (existing.resultSource === "MANUAL") {
+      if (existing.status === "FINISHED" && !canHaveFinalResult(kickoff, now)) {
+        await prisma.match.update({
+          where: { id: existing.id },
+          data: {
+            ...placement,
+            status,
+            lastSyncedAt: now,
+            ...(carries
+              ? resultData
+              : { homeScore: null, awayScore: null, resultSource: null, liveMinute: null, livePeriod: null }),
+          },
+        });
+        result.revertedImpossible++;
+        result.manualMismatches.push({
+          matchId: existing.id,
+          homeTeam: homeName,
+          awayTeam: awayName,
+          jornada: jornadaNumber,
+          ourHome: existing.homeScore,
+          ourAway: existing.awayScore,
+          realHome: carries ? homeScore : null,
+          realAway: carries ? awayScore : null,
+        });
+        continue;
+      }
+      if (!officialResultWins(status, homeScore)) {
+        // The manual score stands for now, but where and when the game is
+        // still follows Dimayor.
+        if (placementChanged) await prisma.match.update({ where: { id: existing.id }, data: placement });
+        result.skippedManual++;
+        continue;
+      }
+    }
+
+    const scoreChanged = carries && (existing.homeScore !== homeScore || existing.awayScore !== awayScore);
+    const statusChanged = existing.status !== status;
+    const liveTick = status === "LIVE" && existing.liveMinute !== f.state.clock;
+    const overridesManual = existing.resultSource === "MANUAL";
+    if (!placementChanged && !scoreChanged && !statusChanged && !liveTick && !overridesManual) continue;
+
+    await prisma.match.update({
+      where: { id: existing.id },
+      data: { ...placement, status, lastSyncedAt: now, ...resultData },
+    });
+    result.updated++;
+    if (placementChanged || scoreChanged || statusChanged) {
+      result.changes.push(
+        `${homeName} vs ${awayName}: ` +
+          [
+            statusChanged ? `estado ${existing.status} -> ${status}` : null,
+            scoreChanged ? `marcador ${existing.homeScore}-${existing.awayScore} -> ${homeScore}-${awayScore}` : null,
+            placementChanged ? "fecha/hora/grupo ajustados" : null,
+          ]
+            .filter(Boolean)
+            .join(", "),
+      );
+    }
+  }
+
+  return result;
 }

@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 
-export type GlassTint = "gold" | "cyan" | "red" | "blue" | "green" | "silver" | "bronze" | "ink";
+export type GlassTint = "gold" | "medal" | "cyan" | "red" | "blue" | "green" | "silver" | "bronze" | "ink";
 type GlassSize = "sm" | "md" | "lg" | "xl";
 
 const ICON_PX: Record<GlassSize, number> = { sm: 15, md: 20, lg: 27, xl: 36 };

@@ -6,7 +6,7 @@ import {
   canHaveFinalResult,
 } from "@/lib/match-time";
 import { computeClubMatchPoints } from "@/lib/scoring";
-import { getAllMatches, getClubMemberships, getClubPredictions } from "@/lib/club-data";
+import { getClubPredictions, getTournamentMatches, getTournamentMembers, type Torneo } from "@/lib/club-data";
 
 export type MatchView = {
   id: string;
@@ -18,6 +18,8 @@ export type MatchView = {
   awayTeam: { id: string; name: string };
   jornadaNumber: number;
   jornadaLabel: string | null;
+  /** Cuadrangulares only: "A" / "B"; null for league games and the final. */
+  groupName: string | null;
   locked: boolean;
   started: boolean;
   postponed: boolean;
@@ -54,13 +56,18 @@ export type MatchView = {
   totalMembers: number;
 };
 
-export async function getClubMatchesView(clubId: string, userId: string, now: Date = new Date()) {
+export async function getClubMatchesView(
+  clubId: string,
+  userId: string,
+  now: Date = new Date(),
+  torneo: Torneo = "liga",
+) {
   // All three are per-request cached and shared with the leaderboard/stats
   // services, so a page that renders several of them still pays for each
   // read only once (see lib/club-data.ts).
   const [matches, memberships, clubPredictions] = await Promise.all([
-    getAllMatches(),
-    getClubMemberships(clubId),
+    getTournamentMatches(torneo),
+    getTournamentMembers(clubId, torneo),
     getClubPredictions(clubId),
   ]);
 
@@ -161,6 +168,7 @@ export async function getClubMatchesView(clubId: string, userId: string, now: Da
       awayTeam: m.awayTeam,
       jornadaNumber: m.jornada.number,
       jornadaLabel: m.jornada.label,
+      groupName: m.groupName,
       locked,
       started,
       postponed,

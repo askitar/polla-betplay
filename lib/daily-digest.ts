@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 import { isSameColombiaDay } from "@/lib/match-time";
+import { PLAYOFF_SEASON_KEY } from "@/lib/playoffs";
 import { getClubLeaderboard } from "@/lib/leaderboard-service";
 import {
   dailyDigestEmailHtml,
@@ -68,15 +69,38 @@ export type DigestForUser = {
 export async function buildDailyDigests(now: Date = new Date()): Promise<DigestForUser[] | null> {
   const allMatches = await prisma.match.findMany({
     where: { status: { notIn: ["POSTPONED", "CANCELLED"] } },
-    include: { homeTeam: true, awayTeam: true },
+    include: { homeTeam: true, awayTeam: true, jornada: { include: { season: true } } },
     orderBy: { kickoff: "asc" },
   });
   const todaysMatches = allMatches.filter((m) => isSameColombiaDay(m.kickoff, now));
   if (todaysMatches.length === 0) return null;
 
-  const memberships = await prisma.membership.findMany({
+  // On a cuadrangulares day the mail goes only to the people playing them
+  // (per club), with that table; nobody else has a marcador to put.
+  const playoffDay = todaysMatches.some((m) => m.jornada.season.externalId === PLAYOFF_SEASON_KEY);
+  const torneo = playoffDay ? ("cuadrangulares" as const) : ("liga" as const);
+  if (playoffDay) {
+    for (let i = todaysMatches.length - 1; i >= 0; i--) {
+      if (todaysMatches[i].jornada.season.externalId !== PLAYOFF_SEASON_KEY) todaysMatches.splice(i, 1);
+    }
+  }
+
+  const allMemberships = await prisma.membership.findMany({
     include: { user: true, club: true },
   });
+  const accepted = playoffDay
+    ? new Set(
+        (
+          await prisma.tournamentEntry.findMany({
+            where: { accepted: true, season: { externalId: PLAYOFF_SEASON_KEY } },
+            select: { userId: true, clubId: true },
+          })
+        ).map((e) => `${e.userId}|${e.clubId}`),
+      )
+    : null;
+  const memberships = accepted
+    ? allMemberships.filter((m) => accepted.has(`${m.userId}|${m.clubId}`))
+    : allMemberships;
   if (memberships.length === 0) return null;
 
   const membershipsByUser = new Map<string, typeof memberships>();
@@ -98,7 +122,7 @@ export async function buildDailyDigests(now: Date = new Date()): Promise<DigestF
   const clubIds = Array.from(new Set(memberships.map((m) => m.clubId)));
   const leaderboards = new Map<string, Awaited<ReturnType<typeof getClubLeaderboard>>["entries"]>();
   for (const clubId of clubIds) {
-    const { entries } = await getClubLeaderboard(clubId);
+    const { entries } = await getClubLeaderboard(clubId, torneo);
     leaderboards.set(clubId, entries);
   }
 

@@ -97,6 +97,8 @@ export function MatchCard({
   isAdmin = false,
   favoriteTeamName = null,
   showJornada = false,
+  stageLabel = null,
+  canPredict = true,
   index = 0,
 }: {
   clubId: string;
@@ -104,6 +106,10 @@ export function MatchCard({
   isAdmin?: boolean;
   favoriteTeamName?: string | null;
   showJornada?: boolean;
+  /** Replaces "Fecha N" when given, e.g. "Grupo A · Fecha 2" or "Final · ida". */
+  stageLabel?: string | null;
+  /** False for someone who has not joined the cuadrangulares: they can look, not predict. */
+  canPredict?: boolean;
   /** Position in its list, for the staggered entrance. */
   index?: number;
 }) {
@@ -152,7 +158,7 @@ export function MatchCard({
       <div
         className={`ticket-card relative p-4 sm:p-5 ${
           match.isNext
-            ? "border-gold/70 shadow-[0_0_0_1px_rgba(255,199,44,0.3),0_18px_50px_-14px_rgba(255,199,44,0.35)]"
+            ? "border-gold/70 shadow-[0_0_0_1px_rgb(var(--accent-rgb)/0.3),0_18px_50px_-14px_rgb(var(--accent-rgb)/0.35)]"
             : match.live
               ? "border-flag-red/40 shadow-[0_0_0_1px_rgba(255,77,94,0.2),0_18px_50px_-14px_rgba(255,77,94,0.3)]"
               : ""
@@ -163,7 +169,7 @@ export function MatchCard({
 
         {match.isNext && (
           <>
-            <div className="absolute -top-3 left-4 rounded-full bg-gradient-to-b from-gold-bright to-gold px-2.5 py-0.5 font-condensed text-[11px] font-bold tracking-[0.12em] text-pitch shadow-[0_6px_16px_-6px_rgba(255,199,44,0.8)]">
+            <div className="absolute -top-3 left-4 rounded-full bg-gradient-to-b from-gold-bright to-gold px-2.5 py-0.5 font-condensed text-[11px] font-bold tracking-[0.12em] text-on-accent shadow-[0_6px_16px_-6px_rgb(var(--accent-rgb)/0.8)]">
               PRÓXIMO
             </div>
             {!match.started && <CountdownTimer kickoff={match.kickoff.toISOString()} />}
@@ -172,7 +178,11 @@ export function MatchCard({
 
         <div className="mb-3 flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2 text-xs text-ink-dim">
-            {showJornada && <span className="chip chip-gold">Fecha {match.jornadaNumber}</span>}
+            {stageLabel ? (
+              <span className="chip chip-gold">{stageLabel}</span>
+            ) : (
+              showJornada && <span className="chip chip-gold">Fecha {match.jornadaNumber}</span>
+            )}
             <span className="truncate">
               {match.postponed
                 ? "Nueva fecha por confirmar"
@@ -250,14 +260,14 @@ export function MatchCard({
               <ScoreDial
                 value={draft.home}
                 onChange={(v) => setDraft((d) => ({ ...d, home: v }))}
-                disabled={match.locked}
+                disabled={match.locked || !canPredict}
                 teamName={match.homeTeam.name}
               />
               <span className="font-display text-xl text-line-strong">–</span>
               <ScoreDial
                 value={draft.away}
                 onChange={(v) => setDraft((d) => ({ ...d, away: v }))}
-                disabled={match.locked}
+                disabled={match.locked || !canPredict}
                 teamName={match.awayTeam.name}
               />
             </div>
@@ -275,7 +285,13 @@ export function MatchCard({
           </div>
         </div>
 
-        {!finished && !match.locked && (
+        {!finished && !match.locked && !canPredict && (
+          <p className="mt-4 text-center text-[12px] text-ink-dim">
+            Únete a los cuadrangulares (arriba) para poner tu marcador.
+          </p>
+        )}
+
+        {!finished && !match.locked && canPredict && (
           <div className="mt-4 flex flex-col items-center gap-1.5">
             {dirty ? (
               <button onClick={handleSave} disabled={pending} className="btn-primary px-6 py-2.5 text-[13px]">
@@ -357,7 +373,7 @@ export function MatchCard({
           </div>
         )}
 
-        {match.selfMissingWarning && (
+        {match.selfMissingWarning && canPredict && (
           <div className="mt-3 flex items-center gap-2 rounded-xl border border-flag-red/40 bg-flag-red/10 px-3 py-2 text-[12px] text-ink">
             <AlertTriangle size={14} className="shrink-0 text-flag-red" />
             Falta menos de 2 horas y todavía no has hecho tu predicción.

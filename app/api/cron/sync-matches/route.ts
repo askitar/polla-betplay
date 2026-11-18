@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Receiver } from "@upstash/qstash";
-import { syncHighlightlyToday, reconcileSeason } from "@/lib/highlightly";
+import { syncHighlightlyToday, reconcileSeason, syncPlayoffs } from "@/lib/highlightly";
 import { COLOMBIA_OFFSET_MS } from "@/lib/match-time";
 import { notifySyncFailure } from "@/lib/alerts";
 
@@ -42,12 +42,16 @@ export async function POST(request: Request) {
   // waiting for (or faking) a real Highlightly failure.
   if (body) {
     try {
-      const { testAlert, reconcile } = JSON.parse(body) as {
+      const { testAlert, reconcile, playoffs } = JSON.parse(body) as {
         testAlert?: boolean;
         reconcile?: boolean;
+        playoffs?: boolean;
       };
       // Manual trigger for the full-season reconciliation, so the calendar
       // can be re-squared on demand instead of waiting for tomorrow's run.
+      if (playoffs) {
+        return NextResponse.json({ playoffs: await syncPlayoffs() });
+      }
       if (reconcile) {
         return NextResponse.json({ reconcile: await reconcileSeason() });
       }

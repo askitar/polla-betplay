@@ -21,12 +21,13 @@ model User {
   favoriteTeamId String?
   createdAt      DateTime  @default(now())
 
-  favoriteTeam Team?        @relation("FavoriteTeam", fields: [favoriteTeamId], references: [id])
-  accounts     Account[]
-  sessions     Session[]
-  memberships  Membership[]
-  predictions  Prediction[]
-  createdClubs Club[]       @relation("ClubCreator")
+  favoriteTeam      Team?             @relation("FavoriteTeam", fields: [favoriteTeamId], references: [id])
+  accounts          Account[]
+  sessions          Session[]
+  memberships       Membership[]
+  predictions       Prediction[]
+  createdClubs      Club[]            @relation("ClubCreator")
+  tournamentEntries TournamentEntry[]
 }
 
 model Account {
@@ -79,8 +80,9 @@ model Club {
   createdById String
   createdAt   DateTime @default(now())
 
-  createdBy   User         @relation("ClubCreator", fields: [createdById], references: [id])
-  memberships Membership[]
+  createdBy         User              @relation("ClubCreator", fields: [createdById], references: [id])
+  memberships       Membership[]
+  tournamentEntries TournamentEntry[]
 }
 
 model Membership {
@@ -105,7 +107,27 @@ model Season {
   externalId String? @unique
   isActive   Boolean @default(true)
 
-  jornadas Jornada[]
+  jornadas          Jornada[]
+  tournamentEntries TournamentEntry[]
+}
+
+// Opt-in to a tournament that isn't the base league (the cuadrangulares),
+// per club. accepted=false records an explicit "no", which can still be
+// changed to yes; accepted=true is final and is never set back to false.
+model TournamentEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  clubId    String
+  seasonId  String
+  accepted  Boolean
+  decidedAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club   Club   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  season Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clubId, seasonId])
+  @@index([clubId, seasonId])
 }
 
 model Jornada {
@@ -129,9 +151,9 @@ model Team {
   // team's badge color/initials stay stable even if the API tweaks its name.
   badgeSeed  String
 
-  homeMatches   Match[] @relation("HomeTeam")
-  awayMatches   Match[] @relation("AwayTeam")
-  favoritedBy   User[]  @relation("FavoriteTeam")
+  homeMatches Match[] @relation("HomeTeam")
+  awayMatches Match[] @relation("AwayTeam")
+  favoritedBy User[]  @relation("FavoriteTeam")
 }
 
 enum MatchStatus {
@@ -148,21 +170,23 @@ enum ResultSource {
 }
 
 model Match {
-  id        String      @id @default(cuid())
-  jornadaId String
-  homeTeamId String
-  awayTeamId String
-  kickoff   DateTime
-  status    MatchStatus @default(SCHEDULED)
-  homeScore Int?
-  awayScore Int?
+  id                String        @id @default(cuid())
+  jornadaId         String
+  homeTeamId        String
+  awayTeamId        String
+  kickoff           DateTime
+  status            MatchStatus   @default(SCHEDULED)
+  homeScore         Int?
+  awayScore         Int?
   // Null until a score exists. MANUAL freezes the row against the sync job.
   resultSource      ResultSource?
   externalFixtureId String?       @unique
   lastSyncedAt      DateTime?
   // Only meaningful while status = LIVE; cleared once FINISHED.
-  liveMinute Int?
-  livePeriod String?
+  liveMinute        Int?
+  livePeriod        String?
+  // Cuadrangulares only: "A" / "B". Null for league games and the final.
+  groupName         String?
 
   jornada     Jornada      @relation(fields: [jornadaId], references: [id], onDelete: Cascade)
   homeTeam    Team         @relation("HomeTeam", fields: [homeTeamId], references: [id])

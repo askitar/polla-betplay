@@ -3,7 +3,7 @@ import { GlassIcon } from "@/components/ui/GlassIcon";
 import type { LeaderboardEntry } from "@/lib/leaderboard-service";
 
 const SLOT = {
-  1: { tint: "gold", icon: Crown, height: "min-h-[132px] sm:min-h-[150px]", glow: "from-gold/35" },
+  1: { tint: "medal", icon: Crown, height: "min-h-[132px] sm:min-h-[150px]", glow: "from-gold/35" },
   2: { tint: "silver", icon: Medal, height: "min-h-[104px] sm:min-h-[118px]", glow: "from-silver/25" },
   3: { tint: "bronze", icon: Award, height: "min-h-[88px] sm:min-h-[100px]", glow: "from-bronze/25" },
 } as const;

@@ -108,10 +108,11 @@ export default async function LandingPage() {
 
       <section className="card mt-10 flex flex-col items-center gap-4 text-center sm:flex-row sm:justify-between sm:text-left">
         <div>
-          <div className="font-display text-2xl">La polla va hasta el todos contra todos.</div>
+          <div className="font-display text-2xl">Liga y cuadrangulares, cada uno con su tabla.</div>
           <p className="mt-1 text-sm text-ink-dim">
-            19 fechas, 190 partidos. Los cuadrangulares y la final no cuentan, así todo el mundo
-            juega las mismas reglas de principio a fin.
+            La polla de la liga va por las 19 fechas del todos contra todos. Los cuadrangulares y la
+            final son una polla aparte que arranca desde cero, con las mismas reglas, para quien
+            quiera entrar.
           </p>
         </div>
         <Link href="/signin" className="btn-primary shrink-0 px-6 py-3">

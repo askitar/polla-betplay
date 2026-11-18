@@ -7,6 +7,10 @@ import { GlassIcon, type GlassTint } from "@/components/ui/GlassIcon";
 import { Podium } from "@/components/leaderboard/Podium";
 import { LeaderboardList } from "@/components/leaderboard/LeaderboardList";
 import { LiveRefresher } from "@/components/live/LiveRefresher";
+import { GroupTables } from "@/components/playoffs/GroupTables";
+import { TorneoSwitch, resolveTorneo } from "@/components/playoffs/TorneoSwitch";
+import { auth } from "@/lib/auth";
+import { getGroupTables, getPlayoffState } from "@/lib/playoff-service";
 
 const RULES: Array<{ icon: typeof Star; tint: GlassTint; title: string; desc: string; pts: string }> = [
   { icon: Target, tint: "red", title: "Marcador exacto", desc: "Aciertas el marcador tal cual.", pts: "5" },
@@ -35,14 +39,23 @@ const RULES: Array<{ icon: typeof Star; tint: GlassTint; title: string; desc: st
 
 export default async function ClasificacionPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ clubId: string }>;
+  searchParams: Promise<{ torneo?: string }>;
 }) {
-  const { clubId } = await params;
-  const [{ entries: leaderboard, hasLiveMatch, lastMatch }, statsByUserMap] = await Promise.all([
-    getClubLeaderboard(clubId),
-    getClubMemberStatsMap(clubId),
+  const [{ clubId }, query, session] = await Promise.all([params, searchParams, auth()]);
+  const playoffs = await getPlayoffState(clubId, session?.user?.id ?? "");
+  const torneo = resolveTorneo(playoffs.active, query.torneo);
+  const isPlayoffs = torneo === "cuadrangulares";
+  const [{ entries: leaderboard, hasLiveMatch, lastMatch }, statsByUserMap, groupTables] = await Promise.all([
+    getClubLeaderboard(clubId, torneo),
+    getClubMemberStatsMap(clubId, torneo),
+    isPlayoffs ? getGroupTables() : Promise.resolve([]),
   ]);
+  // Before the first result everyone is tied on 0: a podium of the whole
+  // club at "1°" says nothing, so it waits for the first points.
+  const showPodium = !isPlayoffs || leaderboard.some((e) => e.points > 0);
   const statsByUser = Object.fromEntries(statsByUserMap);
 
   return (
@@ -50,6 +63,7 @@ export default async function ClasificacionPage({
       <LiveRefresher active={hasLiveMatch} />
 
       <div>
+        {playoffs.active && <TorneoSwitch basePath={`/clubs/${clubId}/clasificacion`} current={torneo} />}
         <SectionLabel
           hint={
             lastMatch
@@ -57,7 +71,7 @@ export default async function ClasificacionPage({
               : undefined
           }
         >
-          Tabla de posiciones
+          {isPlayoffs ? "Tabla de los cuadrangulares" : playoffs.active ? "Tabla final de la liga" : "Tabla de posiciones"}
         </SectionLabel>
 
         {hasLiveMatch && (
@@ -69,7 +83,7 @@ export default async function ClasificacionPage({
 
         {leaderboard.length > 0 ? (
           <>
-            <Podium entries={leaderboard} />
+            {showPodium && <Podium entries={leaderboard} />}
             <p className="mb-2.5 text-xs text-ink-faint">
               Toca un jugador para ver de dónde salen sus puntos. &quot;Últ.&quot; es lo que sumó en el
               último partido jugado.
@@ -78,8 +92,17 @@ export default async function ClasificacionPage({
           </>
         ) : (
           <EmptyNote icon={Star}>
-            Todavía nadie tiene puntos. Se suman cuando se cargan resultados finales.
+            {isPlayoffs
+              ? "Todavía nadie se ha inscrito en los cuadrangulares. Los que digan que sí aparecen aquí, todos desde cero."
+              : "Todavía nadie tiene puntos. Se suman cuando se cargan resultados finales."}
           </EmptyNote>
+        )}
+
+        {groupTables.length > 0 && (
+          <div className="mt-8">
+            <SectionLabel hint="resultados reales de la liga">Así van los grupos</SectionLabel>
+            <GroupTables tables={groupTables} />
+          </div>
         )}
       </div>
 

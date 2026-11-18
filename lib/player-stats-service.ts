@@ -1,5 +1,5 @@
 import { POINTS, computeClubMatchBreakdown } from "@/lib/scoring";
-import { getAllMatches, getClubMemberships, getClubPredictions } from "@/lib/club-data";
+import { getClubPredictions, getTournamentMatches, getTournamentMembers, type Torneo } from "@/lib/club-data";
 
 export type PlayerMatchDetail = {
   matchId: string;
@@ -41,13 +41,16 @@ export type PlayerStats = {
  * computed once and reused for every member, instead of recomputing it once
  * per member.
  */
-export async function getClubMemberStatsMap(clubId: string): Promise<Map<string, PlayerStats>> {
+export async function getClubMemberStatsMap(
+  clubId: string,
+  torneo: Torneo = "liga",
+): Promise<Map<string, PlayerStats>> {
   // Shared per-request with the leaderboard service (lib/club-data.ts) —
   // the clasificacion page renders both, and this used to mean running the
   // same three queries twice.
   const [memberships, allMatches, predictions] = await Promise.all([
-    getClubMemberships(clubId),
-    getAllMatches(),
+    getTournamentMembers(clubId, torneo),
+    getTournamentMatches(torneo),
     getClubPredictions(clubId),
   ]);
   const memberIds = memberships.map((m) => m.userId);

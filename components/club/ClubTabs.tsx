@@ -38,7 +38,7 @@ export function ClubTabs({ clubId }: { clubId: string }) {
           <span
             className={`absolute inset-x-2 top-1 h-9 rounded-xl transition-all duration-300 lg:hidden ${
               t.active
-                ? "bg-gradient-to-b from-white/[0.14] to-white/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_8px_18px_-8px_rgba(255,199,44,0.7)] ring-1 ring-gold/40"
+                ? "bg-gradient-to-b from-white/[0.14] to-white/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_8px_18px_-8px_rgb(var(--accent-rgb)/0.7)] ring-1 ring-gold/40"
                 : "opacity-0 group-active:opacity-60"
             }`}
             aria-hidden
@@ -46,7 +46,7 @@ export function ClubTabs({ clubId }: { clubId: string }) {
           <t.icon
             size={19}
             strokeWidth={t.active ? 2.4 : 2}
-            className={`relative transition-transform duration-300 lg:hidden ${t.active ? "-translate-y-px drop-shadow-[0_0_8px_rgba(255,199,44,0.7)]" : ""}`}
+            className={`relative transition-transform duration-300 lg:hidden ${t.active ? "-translate-y-px drop-shadow-[0_0_8px_rgb(var(--accent-rgb)/0.7)]" : ""}`}
           />
           <t.icon size={15} className="hidden lg:block" />
           <span className="relative">{t.label}</span>

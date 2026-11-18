@@ -4,7 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { ClubHeader } from "@/components/club/ClubHeader";
 import { ClubTabs } from "@/components/club/ClubTabs";
 import { PollaProgressCard } from "@/components/club/PollaProgressCard";
-import { getAllMatches } from "@/lib/club-data";
+import { PlayoffInviteCard } from "@/components/playoffs/PlayoffInviteCard";
+import { PlayoffProgressCard } from "@/components/playoffs/PlayoffProgressCard";
+import { getTournamentMatches } from "@/lib/club-data";
+import { getPlayoffProgress, getPlayoffState } from "@/lib/playoff-service";
 import { computePollaProgress } from "@/lib/season";
 
 export default async function ClubLayout({
@@ -24,14 +27,45 @@ export default async function ClubLayout({
   });
   if (!membership) notFound();
 
-  // Same per-request cached read the pages use, so this adds no extra query.
-  const matches = await getAllMatches();
-  const progress = computePollaProgress(
-    matches.map((m) => ({ jornadaNumber: m.jornada.number, status: m.status, kickoff: m.kickoff })),
-  );
+  // Same per-request cached reads the pages use, so these add no extra query.
+  const playoffs = await getPlayoffState(clubId, session.user.id);
 
+  let banner: React.ReactNode;
+  if (playoffs.active) {
+    if (playoffs.decision?.accepted) {
+      banner = (
+        <PlayoffProgressCard
+          clubId={clubId}
+          progress={await getPlayoffProgress()}
+          participants={playoffs.participants}
+          joined
+        />
+      );
+    } else {
+      banner = (
+        <PlayoffInviteCard
+          clubId={clubId}
+          mode={playoffs.decision ? "declined" : "undecided"}
+          participants={playoffs.participants}
+        />
+      );
+    }
+  } else {
+    const matches = await getTournamentMatches("liga");
+    const progress = computePollaProgress(
+      matches.map((m) => ({ jornadaNumber: m.jornada.number, status: m.status, kickoff: m.kickoff })),
+    );
+    banner = <PollaProgressCard clubId={clubId} progress={progress} />;
+  }
+
+  // Once the cuadrangulares exist the whole club turns red, for everyone.
   return (
-    <div className="flex flex-1 flex-col">
+    <div className={`flex flex-1 flex-col ${playoffs.active ? "theme-red" : ""}`}>
+      {playoffs.active && (
+        <div className="bg-aurora bg-aurora-red" aria-hidden>
+          <div className="grid" />
+        </div>
+      )}
       <ClubHeader
         clubId={clubId}
         clubName={membership.club.name}
@@ -40,7 +74,7 @@ export default async function ClubLayout({
       />
       <ClubTabs clubId={clubId} />
       <div className="mx-auto w-full max-w-3xl flex-1 px-5 pt-6 pb-28 lg:max-w-5xl lg:pb-6">
-        <PollaProgressCard clubId={clubId} progress={progress} />
+        {banner}
         {children}
       </div>
     </div>

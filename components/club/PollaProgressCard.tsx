@@ -24,8 +24,8 @@ export function PollaProgressCard({
           <div className="eyebrow">ASÍ VA LA POLLA</div>
           <div className="mt-0.5 font-display text-2xl leading-tight">¡La polla terminó!</div>
           <p className="mt-1 text-[13px] leading-snug text-ink-dim">
-            Se jugaron las {totalFechas} fechas del todos contra todos. Lo que sigue en la liga
-            (los 8, cuadrangulares y final) no cuenta.
+            Se jugaron las {totalFechas} fechas del todos contra todos. Los cuadrangulares y la
+            final se juegan aparte, en una tabla nueva desde cero.
           </p>
           <Link
             href={`/clubs/${clubId}/clasificacion`}
@@ -84,8 +84,8 @@ export function PollaProgressCard({
         <p className="mt-2 flex items-start gap-1.5 text-[12px] leading-snug text-ink-dim">
           <Flag size={12} className="mt-0.5 shrink-0 text-gold-dim" />
           <span>
-            La polla va hasta el final del todos contra todos ({totalFechas} fechas). Los 8, los
-            cuadrangulares y la final no cuentan.
+            Esta tabla va hasta el final del todos contra todos ({totalFechas} fechas). Los
+            cuadrangulares tienen su propia polla, desde cero.
           </span>
         </p>
       </div>

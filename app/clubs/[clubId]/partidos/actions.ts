@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isLocked, canHaveFinalResult } from "@/lib/match-time";
+import { PLAYOFF_SEASON_KEY } from "@/lib/playoffs";
 
 export async function savePrediction(
   clubId: string,
@@ -25,8 +26,20 @@ export async function savePrediction(
 
   // Re-fetch fresh: never trust a lock/started flag computed earlier in the
   // request lifecycle, always check against the current kickoff + server time.
-  const match = await prisma.match.findUnique({ where: { id: matchId } });
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    include: { jornada: { include: { season: true } } },
+  });
   if (!match) throw new Error("Partido no encontrado.");
+  // Cuadrangulares: only for people who said yes in this club.
+  if (match.jornada.season.externalId === PLAYOFF_SEASON_KEY) {
+    const entry = await prisma.tournamentEntry.findUnique({
+      where: {
+        userId_clubId_seasonId: { userId: session.user.id, clubId, seasonId: match.jornada.seasonId },
+      },
+    });
+    if (!entry?.accepted) throw new Error("Primero únete a los cuadrangulares para poner tu marcador.");
+  }
   // A postponed match has no real kickoff: its stored date is stale and in the
   // past, and predictions stay open on it (the card says so) until it gets a
   // new one. A LIVE match is closed whatever its stored kickoff says.

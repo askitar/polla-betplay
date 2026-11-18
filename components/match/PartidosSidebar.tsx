@@ -24,7 +24,7 @@ export function PartidosSidebar({
       {nextMatch && (
         <div>
           <SectionLabel>Próximo partido</SectionLabel>
-          <div className="ticket-card relative border-gold/60 p-5 shadow-[0_0_0_1px_rgba(255,199,44,0.25),0_18px_50px_-14px_rgba(255,199,44,0.35)]">
+          <div className="ticket-card relative border-gold/60 p-5 shadow-[0_0_0_1px_rgb(var(--accent-rgb)/0.25),0_18px_50px_-14px_rgb(var(--accent-rgb)/0.35)]">
             {!nextMatch.started && <CountdownTimer kickoff={nextMatch.kickoff.toISOString()} />}
             <div className="text-center text-xs text-ink-dim">
               {new Date(nextMatch.kickoff).toLocaleDateString("es-CO", {
