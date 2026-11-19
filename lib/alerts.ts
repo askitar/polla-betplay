@@ -13,9 +13,10 @@ import {
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Solo-maintainer app — this is Oscar's own address, not a third-party
-// destination. Overridable via env without needing a code change.
-const OPS_ALERT_EMAIL = process.env.ALERT_EMAIL ?? "osibozo@gmail.com";
+// Maintainer inbox for operational alerts. Set ALERT_EMAIL in the environment.
+// When it is not set, alerts are skipped instead of failing.
+const OPS_ALERT_EMAIL = process.env.ALERT_EMAIL;
+const NO_ALERT_EMAIL = { skipped: true, reason: "ALERT_EMAIL no está configurado." } as const;
 
 // Highlightly's daily quota resets at UTC midnight (confirmed empirically),
 // which is always 7:00 p. m. Colombia time (UTC-5, no DST).
@@ -79,6 +80,7 @@ export type NotifyOptions = {
  * Never throws — alerting must not mask or replace the underlying error.
  */
 export async function notifySyncFailure(error: unknown, opts: NotifyOptions = {}) {
+  if (!OPS_ALERT_EMAIL) return NO_ALERT_EMAIL;
   const message = error instanceof Error ? error.message : String(error);
   const isQuota = isQuotaExhaustedError(error);
   const isDbDown = isDatabaseUnavailableError(error);
@@ -146,6 +148,7 @@ export async function notifySyncFailure(error: unknown, opts: NotifyOptions = {}
  */
 export async function notifyStuckMatches(matches: StuckMatchRow[]) {
   if (matches.length === 0) return { skipped: true, reason: "Nada atascado." };
+  if (!OPS_ALERT_EMAIL) return NO_ALERT_EMAIL;
 
   const startOfUtcDay = new Date();
   startOfUtcDay.setUTCHours(0, 0, 0, 0);
@@ -194,6 +197,7 @@ export async function notifyStuckMatches(matches: StuckMatchRow[]) {
  */
 export async function notifyManualMismatches(rows: ManualMismatchRow[]) {
   if (rows.length === 0) return { skipped: true, reason: "Sin diferencias." };
+  if (!OPS_ALERT_EMAIL) return NO_ALERT_EMAIL;
 
   const startOfUtcDay = new Date();
   startOfUtcDay.setUTCHours(0, 0, 0, 0);
