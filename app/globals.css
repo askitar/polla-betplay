@@ -836,3 +836,11 @@ body {
 .bg-aurora-red::after {
   background: radial-gradient(circle, rgba(255, 120, 60, 0.12), transparent 62%);
 }
+
+/* Smaller progress ring on phones. */
+@media (max-width: 639px) {
+  .ring.ring-sm {
+    width: 76px;
+    height: 76px;
+  }
+}

@@ -177,13 +177,13 @@ export function MatchCard({
         )}
 
         <div className="mb-3 flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2 text-xs text-ink-dim">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-dim">
             {stageLabel ? (
               <span className="chip chip-gold">{stageLabel}</span>
             ) : (
               showJornada && <span className="chip chip-gold">Fecha {match.jornadaNumber}</span>
             )}
-            <span className="truncate">
+            <span className="whitespace-nowrap">
               {match.postponed
                 ? "Nueva fecha por confirmar"
                 : match.live
@@ -238,10 +238,10 @@ export function MatchCard({
         )}
 
         <div className="flex items-center justify-between gap-1.5 sm:gap-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
+          <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5 text-center sm:flex-row sm:gap-2.5 sm:text-left">
             <TeamBadge name={match.homeTeam.name} uid={`${match.id}-home`} size={38} />
             <span
-              className={`min-w-0 text-[13px] font-semibold leading-tight sm:text-[15px] ${
+              className={`w-full min-w-0 hyphens-auto break-words font-condensed text-[13.5px] font-semibold leading-[1.1] sm:w-auto sm:font-sans sm:text-[15px] sm:leading-tight ${
                 isFavoriteHome ? "text-gold" : ""
               }`}
             >
@@ -250,13 +250,13 @@ export function MatchCard({
           </div>
 
           {finished || match.live ? (
-            <div className="flex items-center gap-3 font-display text-[38px] leading-none sm:text-[44px]">
+            <div className="flex shrink-0 items-center gap-2.5 font-display text-[36px] leading-none sm:gap-3 sm:text-[44px]">
               <span className={match.live ? "num-ink" : "num-gold"}>{match.homeScore}</span>
               <span className="text-xl text-line-strong">–</span>
               <span className={match.live ? "num-ink" : "num-gold"}>{match.awayScore}</span>
             </div>
           ) : (
-            <div className="flex items-center gap-2 sm:gap-4">
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-4">
               <ScoreDial
                 value={draft.home}
                 onChange={(v) => setDraft((d) => ({ ...d, home: v }))}
@@ -273,10 +273,10 @@ export function MatchCard({
             </div>
           )}
 
-          <div className="flex min-w-0 flex-1 flex-row-reverse items-center gap-2 text-right sm:gap-2.5">
+          <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5 text-center sm:flex-row-reverse sm:gap-2.5 sm:text-right">
             <TeamBadge name={match.awayTeam.name} uid={`${match.id}-away`} size={38} />
             <span
-              className={`min-w-0 text-[13px] font-semibold leading-tight sm:text-[15px] ${
+              className={`w-full min-w-0 hyphens-auto break-words font-condensed text-[13.5px] font-semibold leading-[1.1] sm:w-auto sm:font-sans sm:text-[15px] sm:leading-tight ${
                 isFavoriteAway ? "text-gold" : ""
               }`}
             >

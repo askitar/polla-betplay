@@ -87,14 +87,14 @@ test("every group team shows up even before playing", () => {
 test("progress counts against the full bracket, not just published fixtures", () => {
   const published = Array.from({ length: 8 }, (_, i) => ({ jornadaNumber: i < 4 ? 1 : 2, status: "SCHEDULED" }));
   const p = computePlayoffProgress(published);
-  assert.equal(p.total, 14);
-  assert.equal(p.remaining, 14);
+  assert.equal(p.total, 26);
+  assert.equal(p.remaining, 26);
   assert.equal(p.label, "Fecha 1 de 6");
   assert.equal(p.isOver, false);
 });
 
 test("progress reaches the final and then ends", () => {
-  const groups = Array.from({ length: 12 }, (_, i) => ({ jornadaNumber: Math.floor(i / 2) + 1, status: "FINISHED" }));
+  const groups = Array.from({ length: 24 }, (_, i) => ({ jornadaNumber: Math.floor(i / 4) + 1, status: "FINISHED" }));
   assert.equal(
     computePlayoffProgress([...groups, { jornadaNumber: 7, status: "SCHEDULED" }, { jornadaNumber: 8, status: "SCHEDULED" }]).label,
     "Final · ida",

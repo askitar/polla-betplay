@@ -8,7 +8,8 @@ export const PLAYOFF_SEASON_KEY = "cuadrangulares-2026-II";
 /** 6 group fechas (each pair home and away) plus a two-leg final. */
 export const GROUP_FECHAS = 6;
 export const FINAL_FIRST_JORNADA = GROUP_FECHAS + 1; // 7 = ida, 8 = vuelta
-export const PLAYOFF_EXPECTED_MATCHES = 2 * 6 + 2; // two groups of 4: 6 games each, plus the final
+export const GROUP_MATCHES = 2 * 12; // two groups of 4, home and away: 4 x 3 rivals x 2 / 2 = 12 each
+export const PLAYOFF_EXPECTED_MATCHES = GROUP_MATCHES + 2; // 24 group games plus the two-leg final
 
 export type PlayoffRound = { kind: "group"; fecha: number } | { kind: "final" };
 
