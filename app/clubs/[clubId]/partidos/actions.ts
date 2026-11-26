@@ -115,5 +115,6 @@ export async function submitManualResult(
   });
 
   revalidatePath(`/clubs/${clubId}/partidos`);
+  revalidatePath(`/clubs/${clubId}/cronograma`);
   revalidatePath(`/clubs/${clubId}/clasificacion`);
 }

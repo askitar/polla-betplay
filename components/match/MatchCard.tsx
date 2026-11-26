@@ -404,8 +404,19 @@ export function MatchCard({
         {/* Only once the match could actually be over. Showing it under the
             prediction dials on every upcoming match is what let predictions
             get typed into it by mistake and saved as official results. */}
-        {isAdmin && !finished && match.resultEntryOpen && (
-          <AdminResultForm clubId={clubId} matchId={match.id} />
+        {/* Also on final matches, folded and prefilled, so an admin who
+            saved the wrong score can put the right one. */}
+        {isAdmin && match.resultEntryOpen && (
+          <AdminResultForm
+            key={`${match.homeScore}-${match.awayScore}`}
+            clubId={clubId}
+            matchId={match.id}
+            current={
+              finished && match.homeScore != null && match.awayScore != null
+                ? { home: match.homeScore, away: match.awayScore }
+                : null
+            }
+          />
         )}
 
         {match.membersReveal && match.membersReveal.length > 0 && (

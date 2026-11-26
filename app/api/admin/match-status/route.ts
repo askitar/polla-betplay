@@ -113,6 +113,8 @@ export async function POST(request: Request) {
   const match = await prisma.match.update({
     where: { externalFixtureId },
     data: {
+      ...(homeScore != null ? { homeScore, awayScore, resultSource: "MANUAL" as const } : {}),
+      ...(unfreeze ? { homeScore: null, awayScore: null, resultSource: null, liveMinute: null, livePeriod: null } : {}),
       ...(status ? { status: status as MatchStatus } : {}),
       ...(kickoff ? { kickoff: new Date(kickoff) } : {}),
     },
@@ -124,6 +126,8 @@ export async function POST(request: Request) {
     home: match.homeTeam.name,
     away: match.awayTeam.name,
     status: match.status,
+    homeScore: match.homeScore,
+    awayScore: match.awayScore,
     kickoff: match.kickoff,
   });
 }

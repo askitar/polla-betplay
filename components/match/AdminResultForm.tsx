@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ShieldAlert } from "lucide-react";
+import { ShieldAlert, Pencil, ChevronDown } from "lucide-react";
 import { submitManualResult } from "@/app/clubs/[clubId]/partidos/actions";
 
 /**
@@ -13,10 +13,25 @@ import { submitManualResult } from "@/app/clubs/[clubId]/partidos/actions";
  * mix-up is not hypothetical, it is how predictions ended up saved as
  * official results for matches that had not been played.
  */
-export function AdminResultForm({ clubId, matchId }: { clubId: string; matchId: string }) {
-  const [home, setHome] = useState("");
-  const [away, setAway] = useState("");
+export function AdminResultForm({
+  clubId,
+  matchId,
+  current = null,
+}: {
+  clubId: string;
+  matchId: string;
+  /**
+   * The score already saved, when the match is final. Then the form starts
+   * folded behind a "corregir" button and prefilled, so an admin who typed a
+   * wrong result can fix it without it being in everyone's way.
+   */
+  current?: { home: number; away: number } | null;
+}) {
+  const [home, setHome] = useState(current ? String(current.home) : "");
+  const [away, setAway] = useState(current ? String(current.away) : "");
+  const [open, setOpen] = useState(!current);
   const [confirming, setConfirming] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -29,11 +44,37 @@ export function AdminResultForm({ clubId, matchId }: { clubId: string; matchId: 
       try {
         await submitManualResult(clubId, matchId, Number(home), Number(away));
         setConfirming(false);
+        setSaved(`${home}-${away}`);
+        if (current) setOpen(false);
       } catch (e) {
         setError(e instanceof Error ? e.message : "No se pudo guardar.");
         setConfirming(false);
       }
     });
+  }
+
+  const unchanged = current != null && Number(home) === current.home && Number(away) === current.away;
+
+  if (!open) {
+    return (
+      <div className="mt-3 border-t border-dashed border-white/10 pt-3">
+        <button
+          type="button"
+          onClick={() => {
+            setSaved(null);
+            setOpen(true);
+          }}
+          className="flex w-full items-center justify-between gap-2 rounded-xl px-1 py-1 text-left text-[12px] text-ink-dim transition hover:text-ink"
+        >
+          <span className="flex items-center gap-1.5">
+            <Pencil size={13} className="text-flag-red" />
+            Admin: ¿te equivocaste? Corregir el resultado
+          </span>
+          <ChevronDown size={14} />
+        </button>
+        {saved && <p className="mt-1 px-1 text-[12px] text-acierto">Listo, el resultado quedó en {saved}.</p>}
+      </div>
+    );
   }
 
   return (
@@ -70,11 +111,16 @@ export function AdminResultForm({ clubId, matchId }: { clubId: string; matchId: 
           />
           <button
             onClick={() => setConfirming(true)}
-            disabled={!complete}
+            disabled={!complete || unchanged}
             className="btn-secondary px-3 py-1.5 text-xs"
           >
             Corregir resultado
           </button>
+          {current && (
+            <button onClick={() => setOpen(false)} className="text-xs text-ink-faint hover:text-ink">
+              Cerrar
+            </button>
+          )}
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2.5">
@@ -98,6 +144,7 @@ export function AdminResultForm({ clubId, matchId }: { clubId: string; matchId: 
         </div>
       )}
       {error && <p className="mt-1.5 text-xs text-flag-red">{error}</p>}
+      {saved && !current && <p className="mt-1.5 text-xs text-acierto">Listo, el resultado quedó en {saved}.</p>}
     </div>
   );
 }
