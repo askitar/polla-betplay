@@ -127,7 +127,7 @@ function parseScore(current: string | null): [number | null, number | null] {
  * corrections are never touched, same guarantee as the old API-Football
  * sync.
  */
-export async function syncHighlightlyToday(now: Date = new Date()) {
+export async function syncHighlightlyToday(now: Date = new Date(), onlyDates?: string[]) {
   const leagueId = process.env.HIGHLIGHTLY_LEAGUE_ID;
   if (!leagueId) throw new Error("Falta configurar HIGHLIGHTLY_LEAGUE_ID.");
 
@@ -146,8 +146,12 @@ export async function syncHighlightlyToday(now: Date = new Date()) {
   // bookkeeping to already be right — the exact assumption that kept
   // breaking. Adding yesterday's date whenever "now" is in the early UTC
   // hours covers the same window with no DB access and no such trust.
-  const dates = new Set([now.toISOString().slice(0, 10)]);
-  if (now.getUTCHours() < 4) {
+  //
+  // When the caller already knows which matches are in play (the cron does,
+  // see lib/sync-window.ts), it passes their own UTC dates instead, which is
+  // usually a single call even across UTC midnight.
+  const dates = new Set(onlyDates?.length ? onlyDates : [now.toISOString().slice(0, 10)]);
+  if (!onlyDates?.length && now.getUTCHours() < 4) {
     dates.add(new Date(now.getTime() - 24 * 60 * 60_000).toISOString().slice(0, 10));
   }
 

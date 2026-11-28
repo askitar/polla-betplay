@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { Receiver } from "@upstash/qstash";
 import { syncHighlightlyToday, reconcileSeason, syncPlayoffs } from "@/lib/highlightly";
 import { COLOMBIA_OFFSET_MS } from "@/lib/match-time";
+import { activeFixtureDates, isInCronWindow, isReconcileTick } from "@/lib/sync-window";
+import { getPendingKickoffs, refreshLiveWindows } from "@/lib/live-window";
 import { notifySyncFailure } from "@/lib/alerts";
 
 const receiver =
@@ -23,13 +25,6 @@ async function isAuthorized(request: Request, body: string) {
   }
   return false;
 }
-
-// Active window: 7am-11:59pm Colombia. Outside real-world Dimayor kickoff
-// hours nothing plausibly changes, so calls are skipped there for free —
-// this is just an outer guard, not the thing that decides "is a match
-// relevant" (see below for why that used to be the bug).
-const ACTIVE_START_HOUR = 7;
-const ACTIVE_END_HOUR = 23; // inclusive — the 11pm hour still gets ticks.
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -72,64 +67,40 @@ export async function POST(request: Request) {
   const hour = colombiaNow.getUTCHours();
   const minute = colombiaNow.getUTCMinutes();
 
-  if (hour < ACTIVE_START_HOUR || hour > ACTIVE_END_HOUR) {
-    return NextResponse.json({ skipped: true, reason: "Fuera del horario activo (7am-11pm Colombia)." });
+  // QStash calls this every 5 minutes. Nothing happens outside 4pm to
+  // 00:59 Colombia: every match of the cuadrangulares is played in the evening.
+  if (!isInCronWindow(hour)) {
+    return NextResponse.json({ skipped: true, reason: "Fuera del horario (4pm a 1am Colombia)." });
   }
 
-  // QStash still ticks this route every 10 minutes around the clock (no
-  // schedule change needed). Previously this route only called Highlightly
-  // when a match was ALREADY marked LIVE or SCHEDULED within a narrow window
-  // of "now" — but that guard trusted our own bookkeeping to already be
-  // right, which is exactly what breaks: a match with a wrong stored
-  // kickoff time, or one Dimayor postpones same-day hours before it was due
-  // to start, both fall outside that window and never get checked again
-  // until something else happens to fix them. Calling Highlightly
-  // unconditionally on a fixed cadence during the day removes that
-  // dependency — every live/suspended/interrupted/postponed/finished
-  // transition for TODAY's matches gets picked up on a fixed schedule, no
-  // matter what our DB currently believes about them.
-  //
-  // The cadence is tiered instead of a flat 30 min, because a flat 30 min
-  // is exactly what let a match that had actually finished sit reading LIVE
-  // for the better part of an hour: real kickoffs run roughly 1pm-9pm
-  // Colombia and stay live for up to ~2 hours after, so that whole stretch
-  // (13-23h) syncs every tick (~10 min) instead. Colombia 7-10pm (19-22h) is
-  // the one exception within that stretch: it's UTC 0-3, the same window
-  // syncHighlightlyToday also fetches *yesterday*'s date to cover a live
-  // match straddling UTC midnight, which doubles that tick's Highlightly
-  // calls — so it backs off to every ~20 min there to stay inside the
-  // 100/day free quota (worst case ≈80 calls/day with this split; a flat
-  // every-tick cadence all day would be ≈128, over budget). Outside match
-  // hours (7am-1pm) nothing plausible is happening, so that stays at the
-  // original ~30 min.
-  const isSyncTick =
-    hour >= 19 && hour <= 22
-      ? minute % 20 < 10
-      : hour >= 13 && hour <= ACTIVE_END_HOUR
-        ? true
-        : minute % 30 < 10;
-
-  // Once a day, on the first tick of the active window, the WHOLE season is
+  // Once a day, on the first tick of the window, the WHOLE season is
   // re-squared against Highlightly (see reconcileSeason): kickoff times,
-  // statuses and scores for all 190 fixtures, not just today's. The per-day
-  // sync above only ever looks at what is playing today, so a match whose
-  // schedule moved after we stored it was never revisited — which is how the
-  // calendar drifted into matches sitting on the wrong day, in the wrong
-  // order, and two matches frozen mid-live days after they had finished.
-  //
-  // It costs 2 API calls regardless of season size, so it stays off the
-  // every-30-min cadence and well inside the 100/day free quota. It also
-  // fully supersedes the old one-call-per-postponed-match check.
-  const isDailyReconcileWindow = hour === ACTIVE_START_HOUR && minute < 10;
-
-  if (!isSyncTick && !isDailyReconcileWindow) {
-    return NextResponse.json({ skipped: true, reason: "No es un tick de sincronización." });
-  }
+  // statuses and scores, league and cuadrangulares, and new playoff fixtures
+  // get created. Doing it at 4pm, right before the evening's matches, means
+  // a same-day schedule change is already in before anything kicks off.
+  const reconcileTick = isReconcileTick(hour, minute);
 
   try {
-    const sync = isSyncTick ? await syncHighlightlyToday(now) : { skipped: true };
-    const reconciliation = isDailyReconcileWindow ? await reconcileSeason() : { skipped: true };
-    return NextResponse.json({ sync, reconciliation });
+    const reconciliation = reconcileTick ? await reconcileSeason() : { skipped: true };
+    if (reconcileTick) refreshLiveWindows();
+
+    // Highlightly is only called while a match can actually be changing:
+    // from 5 minutes before its kickoff until it is reported finished (or 4
+    // hours have passed). Which matches those are comes from a cached list of
+    // pending kickoffs, so idle ticks cost no API call and no database query.
+    const dates = activeFixtureDates(await getPendingKickoffs(), now);
+    if (dates.length === 0) {
+      return NextResponse.json({ sync: { skipped: true, reason: "Ningún partido en juego." }, reconciliation });
+    }
+
+    const sync = await syncHighlightlyToday(now, dates);
+    // A status, score or kickoff changed: re-read the pending list on the
+    // next tick, so a finished match stops costing calls right away.
+    if ("updated" in sync && sync.updated > 0) refreshLiveWindows();
+    if ("playoffs" in sync && sync.playoffs && (sync.playoffs.updated > 0 || sync.playoffs.created > 0)) {
+      refreshLiveWindows();
+    }
+    return NextResponse.json({ sync, reconciliation, dates });
   } catch (e) {
     // Best-effort: a broken alert email should never mask the real sync
     // error in the response, and it must never throw past this catch.
@@ -138,7 +109,7 @@ export async function POST(request: Request) {
     // reconcileSeason always issues queries, so if the database is down
     // that throws here, and `dailyWindow` lets the alert go out without
     // needing the (unreachable) database-backed throttle.
-    const alert = await notifySyncFailure(e, { dailyWindow: isDailyReconcileWindow }).catch(
+    const alert = await notifySyncFailure(e, { dailyWindow: reconcileTick }).catch(
       () => null,
     );
     return NextResponse.json(
